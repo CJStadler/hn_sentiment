@@ -1,0 +1,27 @@
+{
+  "name": "hn_sentiment",
+  "version": "1.0.0",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+      "dev": "nodemon server.js",
+      "build:jsx": "jsx app/src/ app/build/ -x jsx",
+      "build:bundle": "browserify app/build/app.js app/build/client.js -o public/javascripts/bundle.js -v",
+      "build": "npm run build:jsx && npm run build:bundle",
+      "watch:jsx": "jsx -w app/src/ app/build/ -x jsx",
+      "watch:bundle": "watchify app/build/app.js app/build/client.js -o public/javascripts/bundle.js -v"
+  },
+  "dependencies": {
+    "debug": "~2.0.0",
+    "express": "~4.9.0",
+    "jade": "~1.6.0",
+    "react": "^0.14.0",
+    "react-dom": "^0.14.0"
+  },
+  "devDependencies": {
+    "watchify": "latest",
+    "browserify": "latest",
+    "nodemon": "latest"
+  },
+  "author": "Chris Stadler"
+}
