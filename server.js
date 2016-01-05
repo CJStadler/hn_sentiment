@@ -1,8 +1,12 @@
 var express = require('express');
+var path = require('path');
+var logger = require('morgan');
 var index = require('./routes/index');
 var debug = require('debug')('hn_sentiment');
 
 var app = express();
+
+app.use(logger('dev'));
 
 app.set('port', process.env.OPENSHIFT_NODEJS_PORT || 8080);
 app.set('ip_address', process.env.OPENSHIFT_NODEJS_IP || '127.0.0.1');
@@ -11,6 +15,10 @@ app.set('ip_address', process.env.OPENSHIFT_NODEJS_IP || '127.0.0.1');
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'jade');
 
+// static assets
+app.use(express.static(path.join(__dirname, 'public')));
+
+// routes
 app.use('/', index);
 
 // catch 404 and forward to error handler

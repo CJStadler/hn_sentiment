@@ -4,19 +4,22 @@
   "private": true,
   "main": "server.js",
   "scripts": {
-      "dev": "nodemon server.js",
-      "build:jsx": "jsx app/src/ app/build/ -x jsx",
-      "build:bundle": "browserify app/build/app.js app/build/client.js -o public/javascripts/bundle.js -v",
-      "build": "npm run build:jsx && npm run build:bundle",
-      "watch:jsx": "jsx -w app/src/ app/build/ -x jsx",
-      "watch:bundle": "watchify app/build/app.js app/build/client.js -o public/javascripts/bundle.js -v"
+    "dev": "nodemon server.js",
+    "build:jsx": "jsx app/src/ app/build/ -x jsx",
+    "build:bundle": "browserify app/build/app.js -o public/javascripts/bundle.js -v",
+    "build": "npm run build:jsx && npm run build:bundle",
+    "watch:jsx": "jsx -w app/src/ app/build/ -x jsx",
+    "watch:bundle": "watchify app/build/app.js -o public/javascripts/bundle.js -v"
   },
   "dependencies": {
     "debug": "~2.0.0",
     "express": "~4.9.0",
+    "firebase": "^2.3.2",
     "jade": "~1.6.0",
+    "morgan": "~1.3.0",
     "react": "^0.14.0",
-    "react-dom": "^0.14.0"
+    "react-dom": "^0.14.0",
+    "reactfire": "^0.5.1"
   },
   "devDependencies": {
     "watchify": "latest",
