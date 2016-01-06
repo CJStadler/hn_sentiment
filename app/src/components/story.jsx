@@ -1,21 +1,29 @@
 var React = require('react'),
-    Firebase = require('firebase'),
-    ReactFireMixin = require('reactfire');
+    api = require('../api.js'),
+    ReactFireMixin = require('reactfire'),
+    CommentsSummary = require('./comments_summary.js');
 
 
 var Story = React.createClass({
     mixins: [ReactFireMixin],
 
+    getInitialState: function() {
+        return {story: {}};
+    },
+
     componentWillMount: function() {
-       var ref = new Firebase("https://hacker-news.firebaseio.com/v0/item/" + this.props.hn_id);
-       this.bindAsObject(ref, "story");
+       var story = api.item(this.props.hn_id);
+       this.bindAsObject(story, "story");
     },
 
     render: function() {
         if (this.state === null) {
             return <div>...</div>;
         } else {
-            return <div>{this.state.story["title"]}</div>;
+            return <div>
+                <h2><a href={this.state.story["url"]}>{this.state.story["title"]}</a></h2>
+                <CommentsSummary story_id={this.state.story["id"]} />
+            </div>;
         }
     }
 });
