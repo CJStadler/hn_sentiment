@@ -1,21 +1,24 @@
-var React = require('react'),
-    api = require('../api.js'),
-    ReactFireMixin = require('reactfire');
+var React = require('react');
 
-var CommentsSummary = React.createClass({mixins: [ReactFireMixin],
-
-    getInitialState: function() {
-        return {comment_ids: []};
-    },
-
-    componentDidMount: function() {
-       var kids = api.kids(this.props.story_id);
-       this.bindAsArray(kids, "comment_ids");
-    },
+var CommentsSummary = React.createClass({
 
     render: function() {
-        return <div>{this.state.comment_ids.length} comments</div>;
+        var count = this.props.story.descendants;
+        // each_item(this.props.comments, function(item) {
+        //     count += 1;
+        // });
+        return <div>{count} comments</div>;
     }
+
 });
+
+var each_item = function(items, callback) {
+    items.forEach(function(item) {
+        callback(item);
+        if (item.hasOwnProperty("kids")) {
+            each_item(item.kids, callback);
+        }
+    })
+}
 
 module.exports = CommentsSummary;

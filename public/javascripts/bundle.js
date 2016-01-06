@@ -55,34 +55,29 @@ var App = React.createClass({displayName: "App",
     },
 
     componentWillMount: function() {
-        var stories = [];
-        this.firebaseRef = api.topstories(10, function(story) {
-            stories.push(story);
-        });
 
-        this.setState({
-            stories: stories
-        });
-    //   var ref = api.topstories.limitToFirst(10);
-    //   this.bindAsArray(ref, "story_ids");
+        api.topstories(10, function(story) {
+            var stories = this.state.stories.slice();
+            stories.push(story);
+            this.setState({stories: stories});
+        }.bind(this));
+
     },
 
     componentWillUnmount: function() {
-        this.firebaseRef.off();
+        // do we need to turn off the firebase refs here?
     },
 
     render: function() {
         var stories;
-        // if (this.state.story_ids.length === 0) {
-        //     stories = <div>Loading...</div>;
-        // } else {
-        //     stories = this.state.story_ids.map(function(id_obj) {
-        //         var id = id_obj[".value"];
-        //         return <Story hn_id={id} key={id_obj[".key"]}/>;
-        //     })
-        // }
-        // return <div>{stories}</div>
-        return React.createElement("div", null);
+        if (this.state.stories.length === 0) {
+            stories = React.createElement("div", null, "Loading...");
+        } else {
+            stories = this.state.stories.map(function(story) {
+                return React.createElement(Story, {story: story, key: story.id});
+            })
+        }
+        return React.createElement("div", null, stories)
     }
 });
 
@@ -91,54 +86,45 @@ ReactDOM.render(React.createElement(App, null), document.getElementById('app'));
 module.exports = App;
 
 },{"./api.js":1,"./components/story.js":4,"react":163,"react-dom":7,"reactfire":164}],3:[function(require,module,exports){
-var React = require('react'),
-    api = require('../api.js'),
-    ReactFireMixin = require('reactfire');
+var React = require('react');
 
-var CommentsSummary = React.createClass({displayName: "CommentsSummary",mixins: [ReactFireMixin],
-
-    getInitialState: function() {
-        return {comment_ids: []};
-    },
-
-    componentDidMount: function() {
-       var kids = api.kids(this.props.story_id);
-       this.bindAsArray(kids, "comment_ids");
-    },
+var CommentsSummary = React.createClass({displayName: "CommentsSummary",
 
     render: function() {
-        return React.createElement("div", null, this.state.comment_ids.length, " comments");
+        var count = this.props.story.descendants;
+        // each_item(this.props.comments, function(item) {
+        //     count += 1;
+        // });
+        return React.createElement("div", null, count, " comments");
     }
+
 });
+
+var each_item = function(items, callback) {
+    items.forEach(function(item) {
+        callback(item);
+        if (item.hasOwnProperty("kids")) {
+            each_item(item.kids, callback);
+        }
+    })
+}
 
 module.exports = CommentsSummary;
 
-},{"../api.js":1,"react":163,"reactfire":164}],4:[function(require,module,exports){
+},{"react":163}],4:[function(require,module,exports){
 var React = require('react'),
-    api = require('../api.js'),
-    ReactFireMixin = require('reactfire'),
     CommentsSummary = require('./comments_summary.js');
 
 
 var Story = React.createClass({displayName: "Story",
-    mixins: [ReactFireMixin],
-
-    getInitialState: function() {
-        return {story: {}};
-    },
-
-    componentWillMount: function() {
-       var story = api.item(this.props.hn_id);
-       this.bindAsObject(story, "story");
-    },
 
     render: function() {
-        if (this.state === null) {
+        if (this.props.story === null) {
             return React.createElement("div", null, "...");
         } else {
             return React.createElement("div", null, 
-                React.createElement("h2", null, React.createElement("a", {href: this.state.story["url"]}, this.state.story["title"])), 
-                React.createElement(CommentsSummary, {story_id: this.state.story["id"]})
+                React.createElement("h2", null, React.createElement("a", {href: this.props.story.url}, this.props.story.title)), 
+                React.createElement(CommentsSummary, {story: this.props.story})
             );
         }
     }
@@ -146,7 +132,7 @@ var Story = React.createClass({displayName: "Story",
 
 module.exports = Story;
 
-},{"../api.js":1,"./comments_summary.js":3,"react":163,"reactfire":164}],5:[function(require,module,exports){
+},{"./comments_summary.js":3,"react":163}],5:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};

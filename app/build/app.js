@@ -12,34 +12,29 @@ var App = React.createClass({displayName: "App",
     },
 
     componentWillMount: function() {
-        var stories = [];
-        this.firebaseRef = api.topstories(10, function(story) {
-            stories.push(story);
-        });
 
-        this.setState({
-            stories: stories
-        });
-    //   var ref = api.topstories.limitToFirst(10);
-    //   this.bindAsArray(ref, "story_ids");
+        api.topstories(10, function(story) {
+            var stories = this.state.stories.slice();
+            stories.push(story);
+            this.setState({stories: stories});
+        }.bind(this));
+
     },
 
     componentWillUnmount: function() {
-        this.firebaseRef.off();
+        // do we need to turn off the firebase refs here?
     },
 
     render: function() {
         var stories;
-        // if (this.state.story_ids.length === 0) {
-        //     stories = <div>Loading...</div>;
-        // } else {
-        //     stories = this.state.story_ids.map(function(id_obj) {
-        //         var id = id_obj[".value"];
-        //         return <Story hn_id={id} key={id_obj[".key"]}/>;
-        //     })
-        // }
-        // return <div>{stories}</div>
-        return React.createElement("div", null);
+        if (this.state.stories.length === 0) {
+            stories = React.createElement("div", null, "Loading...");
+        } else {
+            stories = this.state.stories.map(function(story) {
+                return React.createElement(Story, {story: story, key: story.id});
+            })
+        }
+        return React.createElement("div", null, stories)
     }
 });
 
