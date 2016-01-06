@@ -19,7 +19,8 @@
     "morgan": "~1.3.0",
     "react": "^0.14.0",
     "react-dom": "^0.14.0",
-    "reactfire": "^0.5.1"
+    "reactfire": "^0.5.1",
+    "sentiment": "^1.0.4"
   },
   "devDependencies": {
     "watchify": "latest",
