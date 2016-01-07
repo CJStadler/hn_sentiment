@@ -13,7 +13,7 @@ var App = React.createClass({
 
     componentWillMount: function() {
 
-        api.topstories(20, function(story) {
+        api.topstories(30, function(story) {
             var stories = this.state.stories.slice();
             stories.push(story);
             this.setState({stories: stories});

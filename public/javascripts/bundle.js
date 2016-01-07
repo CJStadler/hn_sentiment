@@ -60,7 +60,7 @@ var api = {
 };
 module.exports = api;
 
-},{"firebase":6}],2:[function(require,module,exports){
+},{"firebase":7}],2:[function(require,module,exports){
 var React = require('react'),
     ReactDOM = require('react-dom'),
     api = require("./api.js"),
@@ -76,7 +76,7 @@ var App = React.createClass({displayName: "App",
 
     componentWillMount: function() {
 
-        api.topstories(20, function(story) {
+        api.topstories(30, function(story) {
             var stories = this.state.stories.slice();
             stories.push(story);
             this.setState({stories: stories});
@@ -105,10 +105,13 @@ ReactDOM.render(React.createElement(App, null), document.getElementById('app'));
 
 module.exports = App;
 
-},{"./api.js":1,"./components/story.js":4,"react":163,"react-dom":7,"reactfire":164}],3:[function(require,module,exports){
+},{"./api.js":1,"./components/story.js":4,"react":164,"react-dom":8,"reactfire":165}],3:[function(require,module,exports){
 var React = require('react'),
     sentiment = require('sentiment'),
+    chroma = require('chroma-js'),
     api = require("../api.js");
+
+var chroma_scale = chroma.scale("RdBu").domain([-0.5, 0.5]);
 
 var CommentsSummary = React.createClass({displayName: "CommentsSummary",
 
@@ -119,10 +122,10 @@ var CommentsSummary = React.createClass({displayName: "CommentsSummary",
     componentWillMount: function() {
         api.all_descendants(this.props.story, function(comment) {
 
-            if (typeof comment === "undefined") {
+            if (typeof comment === "undefined" || comment === null) {
                 debugger;
             }
-            
+
             if (! comment.hasOwnProperty("deleted") || comment.deleted === false) {
                 var s_comp = sentiment(comment.text).comparative;
                 // update state
@@ -139,8 +142,8 @@ var CommentsSummary = React.createClass({displayName: "CommentsSummary",
     },
 
     render: function() {
-        var sum;
-        var mean = 0;
+        var sum = 0;
+        var score = 0;
         var n_comments = this.state.sentiments.length;
 
         if (n_comments > 0) {
@@ -148,13 +151,64 @@ var CommentsSummary = React.createClass({displayName: "CommentsSummary",
                 return sum + current;
             }, 0);
 
-            mean = sum / this.state.sentiments.length;
+            score = sum / this.state.sentiments.length;
         }
-
-        return React.createElement("div", null, this.props.story.descendants, " comments ", mean);
+        var normalized = normalize(score, n_comments);
+        var color = chroma_scale(normalized);
+        var style = {
+            border: "1px solid gray",
+            display: "inline-block",
+            height: "1em",
+            width: "1em",
+            backgroundColor: color
+        };
+        // return <div>{n_comments},{sum},{mean}</div>;
+        return React.createElement("div", null, 
+            this.props.story.descendants, " comments", 
+            normalized, 
+            React.createElement("span", {style: style})
+        );
     }
 
 });
+
+
+var normalize = function(score, n_comments) {
+    // measured values
+    var mean = 0.106;
+    var sd = 0.127;
+
+    // when there are more comments the score tends towards the mean, so this minimizes that
+    var comments_scale = score * Math.log(n_comments)
+
+    // differences close to the mean should be more apparent than differences far from it
+    var from_mean;
+    if (score >= mean) {
+        from_mean = normalcdf(mean, sd, comments_scale) - 0.5;
+    } else {
+        from_mean = 0.5 - normalcdf(mean, sd, 2*mean - comments_scale);
+    }
+    return from_mean;
+};
+
+// http://stackoverflow.com/questions/5259421/cumulative-distribution-function-in-javascript
+function normalcdf(mean, sigma, to)
+{
+    var z = (to-mean)/Math.sqrt(2*sigma*sigma);
+    var t = 1/(1+0.3275911*Math.abs(z));
+    var a1 =  0.254829592;
+    var a2 = -0.284496736;
+    var a3 =  1.421413741;
+    var a4 = -1.453152027;
+    var a5 =  1.061405429;
+    var erf = 1-(((((a5*t + a4)*t) + a3)*t + a2)*t + a1)*t*Math.exp(-z*z);
+    var sign = 1;
+    if(z < 0)
+    {
+        sign = -1;
+    }
+    return (1/2)*(1+sign*erf);
+}
 
 // var each_comment = function(item, callback) {
 //     if (typeof item !== 'undefined' && item !== null) {
@@ -169,7 +223,7 @@ var CommentsSummary = React.createClass({displayName: "CommentsSummary",
 
 module.exports = CommentsSummary;
 
-},{"../api.js":1,"react":163,"sentiment":166}],4:[function(require,module,exports){
+},{"../api.js":1,"chroma-js":6,"react":164,"sentiment":167}],4:[function(require,module,exports){
 var React = require('react'),
     CommentsSummary = require('./comments_summary.js');
 
@@ -180,6 +234,7 @@ var Story = React.createClass({displayName: "Story",
         if (this.props.story === null) {
             return React.createElement("div", null, "...");
         } else {
+            // return <div><CommentsSummary story={this.props.story} /></div>;
             return React.createElement("div", null, 
                 React.createElement("h2", null, React.createElement("a", {href: this.props.story.url}, this.props.story.title)), 
                 React.createElement(CommentsSummary, {story: this.props.story})
@@ -190,7 +245,7 @@ var Story = React.createClass({displayName: "Story",
 
 module.exports = Story;
 
-},{"./comments_summary.js":3,"react":163}],5:[function(require,module,exports){
+},{"./comments_summary.js":3,"react":164}],5:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -284,6 +339,2473 @@ process.chdir = function (dir) {
 process.umask = function() { return 0; };
 
 },{}],6:[function(require,module,exports){
+
+/**
+ * @license
+ *
+ * chroma.js - JavaScript library for color conversions
+ * 
+ * Copyright (c) 2011-2015, Gregor Aisch
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * 3. The name Gregor Aisch may not be used to endorse or promote products
+ *    derived from this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL GREGOR AISCH OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+ * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
+(function() {
+  var Color, DEG2RAD, LAB_CONSTANTS, PI, PITHIRD, RAD2DEG, TWOPI, _guess_formats, _guess_formats_sorted, _input, _interpolators, abs, atan2, bezier, blend, blend_f, brewer, burn, chroma, clip_rgb, cmyk2rgb, colors, cos, css2rgb, darken, dodge, each, floor, hex2rgb, hsi2rgb, hsl2css, hsl2rgb, hsv2rgb, interpolate, interpolate_hsx, interpolate_lab, interpolate_num, interpolate_rgb, lab2lch, lab2rgb, lab_xyz, lch2lab, lch2rgb, lighten, limit, log, luminance_x, m, max, multiply, normal, num2rgb, overlay, pow, rgb2cmyk, rgb2css, rgb2hex, rgb2hsi, rgb2hsl, rgb2hsv, rgb2lab, rgb2lch, rgb2luminance, rgb2num, rgb2temperature, rgb2xyz, rgb_xyz, rnd, root, round, screen, sin, sqrt, temperature2rgb, type, unpack, w3cx11, xyz_lab, xyz_rgb,
+    slice = [].slice;
+
+  type = (function() {
+
+    /*
+    for browser-safe type checking+
+    ported from jQuery's $.type
+     */
+    var classToType, len, name, o, ref;
+    classToType = {};
+    ref = "Boolean Number String Function Array Date RegExp Undefined Null".split(" ");
+    for (o = 0, len = ref.length; o < len; o++) {
+      name = ref[o];
+      classToType["[object " + name + "]"] = name.toLowerCase();
+    }
+    return function(obj) {
+      var strType;
+      strType = Object.prototype.toString.call(obj);
+      return classToType[strType] || "object";
+    };
+  })();
+
+  limit = function(x, min, max) {
+    if (min == null) {
+      min = 0;
+    }
+    if (max == null) {
+      max = 1;
+    }
+    if (x < min) {
+      x = min;
+    }
+    if (x > max) {
+      x = max;
+    }
+    return x;
+  };
+
+  unpack = function(args) {
+    if (args.length >= 3) {
+      return [].slice.call(args);
+    } else {
+      return args[0];
+    }
+  };
+
+  clip_rgb = function(rgb) {
+    var i;
+    for (i in rgb) {
+      if (i < 3) {
+        if (rgb[i] < 0) {
+          rgb[i] = 0;
+        }
+        if (rgb[i] > 255) {
+          rgb[i] = 255;
+        }
+      } else if (i === 3) {
+        if (rgb[i] < 0) {
+          rgb[i] = 0;
+        }
+        if (rgb[i] > 1) {
+          rgb[i] = 1;
+        }
+      }
+    }
+    return rgb;
+  };
+
+  PI = Math.PI, round = Math.round, cos = Math.cos, floor = Math.floor, pow = Math.pow, log = Math.log, sin = Math.sin, sqrt = Math.sqrt, atan2 = Math.atan2, max = Math.max, abs = Math.abs;
+
+  TWOPI = PI * 2;
+
+  PITHIRD = PI / 3;
+
+  DEG2RAD = PI / 180;
+
+  RAD2DEG = 180 / PI;
+
+  chroma = function() {
+    if (arguments[0] instanceof Color) {
+      return arguments[0];
+    }
+    return (function(func, args, ctor) {
+      ctor.prototype = func.prototype;
+      var child = new ctor, result = func.apply(child, args);
+      return Object(result) === result ? result : child;
+    })(Color, arguments, function(){});
+  };
+
+  _interpolators = [];
+
+  if ((typeof module !== "undefined" && module !== null) && (module.exports != null)) {
+    module.exports = chroma;
+  }
+
+  if (typeof define === 'function' && define.amd) {
+    define([], function() {
+      return chroma;
+    });
+  } else {
+    root = typeof exports !== "undefined" && exports !== null ? exports : this;
+    root.chroma = chroma;
+  }
+
+  chroma.version = '1.1.1';
+
+
+  /**
+      chroma.js
+  
+      Copyright (c) 2011-2013, Gregor Aisch
+      All rights reserved.
+  
+      Redistribution and use in source and binary forms, with or without
+      modification, are permitted provided that the following conditions are met:
+  
+      * Redistributions of source code must retain the above copyright notice, this
+        list of conditions and the following disclaimer.
+  
+      * Redistributions in binary form must reproduce the above copyright notice,
+        this list of conditions and the following disclaimer in the documentation
+        and/or other materials provided with the distribution.
+  
+      * The name Gregor Aisch may not be used to endorse or promote products
+        derived from this software without specific prior written permission.
+  
+      THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+      AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+      IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+      DISCLAIMED. IN NO EVENT SHALL GREGOR AISCH OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+      INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+      BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+      DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+      OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+      NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+      EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  
+      @source: https://github.com/gka/chroma.js
+   */
+
+  _input = {};
+
+  _guess_formats = [];
+
+  _guess_formats_sorted = false;
+
+  Color = (function() {
+    function Color() {
+      var arg, args, chk, len, len1, me, mode, o, w;
+      me = this;
+      args = [];
+      for (o = 0, len = arguments.length; o < len; o++) {
+        arg = arguments[o];
+        if (arg != null) {
+          args.push(arg);
+        }
+      }
+      mode = args[args.length - 1];
+      if (_input[mode] != null) {
+        me._rgb = clip_rgb(_input[mode](unpack(args.slice(0, -1))));
+      } else {
+        if (!_guess_formats_sorted) {
+          _guess_formats = _guess_formats.sort(function(a, b) {
+            return b.p - a.p;
+          });
+          _guess_formats_sorted = true;
+        }
+        for (w = 0, len1 = _guess_formats.length; w < len1; w++) {
+          chk = _guess_formats[w];
+          mode = chk.test.apply(chk, args);
+          if (mode) {
+            break;
+          }
+        }
+        if (mode) {
+          me._rgb = clip_rgb(_input[mode].apply(_input, args));
+        }
+      }
+      if (me._rgb == null) {
+        console.warn('unknown format: ' + args);
+      }
+      if (me._rgb == null) {
+        me._rgb = [0, 0, 0];
+      }
+      if (me._rgb.length === 3) {
+        me._rgb.push(1);
+      }
+    }
+
+    Color.prototype.alpha = function(alpha) {
+      if (arguments.length) {
+        this._rgb[3] = alpha;
+        return this;
+      }
+      return this._rgb[3];
+    };
+
+    Color.prototype.toString = function() {
+      return this.name();
+    };
+
+    return Color;
+
+  })();
+
+  chroma._input = _input;
+
+
+  /**
+  	ColorBrewer colors for chroma.js
+  
+  	Copyright (c) 2002 Cynthia Brewer, Mark Harrower, and The 
+  	Pennsylvania State University.
+  
+  	Licensed under the Apache License, Version 2.0 (the "License"); 
+  	you may not use this file except in compliance with the License.
+  	You may obtain a copy of the License at	
+  	http://www.apache.org/licenses/LICENSE-2.0
+  
+  	Unless required by applicable law or agreed to in writing, software distributed
+  	under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+  	CONDITIONS OF ANY KIND, either express or implied. See the License for the
+  	specific language governing permissions and limitations under the License.
+  
+      @preserve
+   */
+
+  chroma.brewer = brewer = {
+    OrRd: ['#fff7ec', '#fee8c8', '#fdd49e', '#fdbb84', '#fc8d59', '#ef6548', '#d7301f', '#b30000', '#7f0000'],
+    PuBu: ['#fff7fb', '#ece7f2', '#d0d1e6', '#a6bddb', '#74a9cf', '#3690c0', '#0570b0', '#045a8d', '#023858'],
+    BuPu: ['#f7fcfd', '#e0ecf4', '#bfd3e6', '#9ebcda', '#8c96c6', '#8c6bb1', '#88419d', '#810f7c', '#4d004b'],
+    Oranges: ['#fff5eb', '#fee6ce', '#fdd0a2', '#fdae6b', '#fd8d3c', '#f16913', '#d94801', '#a63603', '#7f2704'],
+    BuGn: ['#f7fcfd', '#e5f5f9', '#ccece6', '#99d8c9', '#66c2a4', '#41ae76', '#238b45', '#006d2c', '#00441b'],
+    YlOrBr: ['#ffffe5', '#fff7bc', '#fee391', '#fec44f', '#fe9929', '#ec7014', '#cc4c02', '#993404', '#662506'],
+    YlGn: ['#ffffe5', '#f7fcb9', '#d9f0a3', '#addd8e', '#78c679', '#41ab5d', '#238443', '#006837', '#004529'],
+    Reds: ['#fff5f0', '#fee0d2', '#fcbba1', '#fc9272', '#fb6a4a', '#ef3b2c', '#cb181d', '#a50f15', '#67000d'],
+    RdPu: ['#fff7f3', '#fde0dd', '#fcc5c0', '#fa9fb5', '#f768a1', '#dd3497', '#ae017e', '#7a0177', '#49006a'],
+    Greens: ['#f7fcf5', '#e5f5e0', '#c7e9c0', '#a1d99b', '#74c476', '#41ab5d', '#238b45', '#006d2c', '#00441b'],
+    YlGnBu: ['#ffffd9', '#edf8b1', '#c7e9b4', '#7fcdbb', '#41b6c4', '#1d91c0', '#225ea8', '#253494', '#081d58'],
+    Purples: ['#fcfbfd', '#efedf5', '#dadaeb', '#bcbddc', '#9e9ac8', '#807dba', '#6a51a3', '#54278f', '#3f007d'],
+    GnBu: ['#f7fcf0', '#e0f3db', '#ccebc5', '#a8ddb5', '#7bccc4', '#4eb3d3', '#2b8cbe', '#0868ac', '#084081'],
+    Greys: ['#ffffff', '#f0f0f0', '#d9d9d9', '#bdbdbd', '#969696', '#737373', '#525252', '#252525', '#000000'],
+    YlOrRd: ['#ffffcc', '#ffeda0', '#fed976', '#feb24c', '#fd8d3c', '#fc4e2a', '#e31a1c', '#bd0026', '#800026'],
+    PuRd: ['#f7f4f9', '#e7e1ef', '#d4b9da', '#c994c7', '#df65b0', '#e7298a', '#ce1256', '#980043', '#67001f'],
+    Blues: ['#f7fbff', '#deebf7', '#c6dbef', '#9ecae1', '#6baed6', '#4292c6', '#2171b5', '#08519c', '#08306b'],
+    PuBuGn: ['#fff7fb', '#ece2f0', '#d0d1e6', '#a6bddb', '#67a9cf', '#3690c0', '#02818a', '#016c59', '#014636'],
+    Spectral: ['#9e0142', '#d53e4f', '#f46d43', '#fdae61', '#fee08b', '#ffffbf', '#e6f598', '#abdda4', '#66c2a5', '#3288bd', '#5e4fa2'],
+    RdYlGn: ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee08b', '#ffffbf', '#d9ef8b', '#a6d96a', '#66bd63', '#1a9850', '#006837'],
+    RdBu: ['#67001f', '#b2182b', '#d6604d', '#f4a582', '#fddbc7', '#f7f7f7', '#d1e5f0', '#92c5de', '#4393c3', '#2166ac', '#053061'],
+    PiYG: ['#8e0152', '#c51b7d', '#de77ae', '#f1b6da', '#fde0ef', '#f7f7f7', '#e6f5d0', '#b8e186', '#7fbc41', '#4d9221', '#276419'],
+    PRGn: ['#40004b', '#762a83', '#9970ab', '#c2a5cf', '#e7d4e8', '#f7f7f7', '#d9f0d3', '#a6dba0', '#5aae61', '#1b7837', '#00441b'],
+    RdYlBu: ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#ffffbf', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4', '#313695'],
+    BrBG: ['#543005', '#8c510a', '#bf812d', '#dfc27d', '#f6e8c3', '#f5f5f5', '#c7eae5', '#80cdc1', '#35978f', '#01665e', '#003c30'],
+    RdGy: ['#67001f', '#b2182b', '#d6604d', '#f4a582', '#fddbc7', '#ffffff', '#e0e0e0', '#bababa', '#878787', '#4d4d4d', '#1a1a1a'],
+    PuOr: ['#7f3b08', '#b35806', '#e08214', '#fdb863', '#fee0b6', '#f7f7f7', '#d8daeb', '#b2abd2', '#8073ac', '#542788', '#2d004b'],
+    Set2: ['#66c2a5', '#fc8d62', '#8da0cb', '#e78ac3', '#a6d854', '#ffd92f', '#e5c494', '#b3b3b3'],
+    Accent: ['#7fc97f', '#beaed4', '#fdc086', '#ffff99', '#386cb0', '#f0027f', '#bf5b17', '#666666'],
+    Set1: ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f00', '#ffff33', '#a65628', '#f781bf', '#999999'],
+    Set3: ['#8dd3c7', '#ffffb3', '#bebada', '#fb8072', '#80b1d3', '#fdb462', '#b3de69', '#fccde5', '#d9d9d9', '#bc80bd', '#ccebc5', '#ffed6f'],
+    Dark2: ['#1b9e77', '#d95f02', '#7570b3', '#e7298a', '#66a61e', '#e6ab02', '#a6761d', '#666666'],
+    Paired: ['#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99', '#e31a1c', '#fdbf6f', '#ff7f00', '#cab2d6', '#6a3d9a', '#ffff99', '#b15928'],
+    Pastel2: ['#b3e2cd', '#fdcdac', '#cbd5e8', '#f4cae4', '#e6f5c9', '#fff2ae', '#f1e2cc', '#cccccc'],
+    Pastel1: ['#fbb4ae', '#b3cde3', '#ccebc5', '#decbe4', '#fed9a6', '#ffffcc', '#e5d8bd', '#fddaec', '#f2f2f2']
+  };
+
+
+  /**
+  	X11 color names
+  
+  	http://www.w3.org/TR/css3-color/#svg-color
+   */
+
+  w3cx11 = {
+    indigo: "#4b0082",
+    gold: "#ffd700",
+    hotpink: "#ff69b4",
+    firebrick: "#b22222",
+    indianred: "#cd5c5c",
+    yellow: "#ffff00",
+    mistyrose: "#ffe4e1",
+    darkolivegreen: "#556b2f",
+    olive: "#808000",
+    darkseagreen: "#8fbc8f",
+    pink: "#ffc0cb",
+    tomato: "#ff6347",
+    lightcoral: "#f08080",
+    orangered: "#ff4500",
+    navajowhite: "#ffdead",
+    lime: "#00ff00",
+    palegreen: "#98fb98",
+    darkslategrey: "#2f4f4f",
+    greenyellow: "#adff2f",
+    burlywood: "#deb887",
+    seashell: "#fff5ee",
+    mediumspringgreen: "#00fa9a",
+    fuchsia: "#ff00ff",
+    papayawhip: "#ffefd5",
+    blanchedalmond: "#ffebcd",
+    chartreuse: "#7fff00",
+    dimgray: "#696969",
+    black: "#000000",
+    peachpuff: "#ffdab9",
+    springgreen: "#00ff7f",
+    aquamarine: "#7fffd4",
+    white: "#ffffff",
+    orange: "#ffa500",
+    lightsalmon: "#ffa07a",
+    darkslategray: "#2f4f4f",
+    brown: "#a52a2a",
+    ivory: "#fffff0",
+    dodgerblue: "#1e90ff",
+    peru: "#cd853f",
+    lawngreen: "#7cfc00",
+    chocolate: "#d2691e",
+    crimson: "#dc143c",
+    forestgreen: "#228b22",
+    darkgrey: "#a9a9a9",
+    lightseagreen: "#20b2aa",
+    cyan: "#00ffff",
+    mintcream: "#f5fffa",
+    silver: "#c0c0c0",
+    antiquewhite: "#faebd7",
+    mediumorchid: "#ba55d3",
+    skyblue: "#87ceeb",
+    gray: "#808080",
+    darkturquoise: "#00ced1",
+    goldenrod: "#daa520",
+    darkgreen: "#006400",
+    floralwhite: "#fffaf0",
+    darkviolet: "#9400d3",
+    darkgray: "#a9a9a9",
+    moccasin: "#ffe4b5",
+    saddlebrown: "#8b4513",
+    grey: "#808080",
+    darkslateblue: "#483d8b",
+    lightskyblue: "#87cefa",
+    lightpink: "#ffb6c1",
+    mediumvioletred: "#c71585",
+    slategrey: "#708090",
+    red: "#ff0000",
+    deeppink: "#ff1493",
+    limegreen: "#32cd32",
+    darkmagenta: "#8b008b",
+    palegoldenrod: "#eee8aa",
+    plum: "#dda0dd",
+    turquoise: "#40e0d0",
+    lightgrey: "#d3d3d3",
+    lightgoldenrodyellow: "#fafad2",
+    darkgoldenrod: "#b8860b",
+    lavender: "#e6e6fa",
+    maroon: "#800000",
+    yellowgreen: "#9acd32",
+    sandybrown: "#f4a460",
+    thistle: "#d8bfd8",
+    violet: "#ee82ee",
+    navy: "#000080",
+    magenta: "#ff00ff",
+    dimgrey: "#696969",
+    tan: "#d2b48c",
+    rosybrown: "#bc8f8f",
+    olivedrab: "#6b8e23",
+    blue: "#0000ff",
+    lightblue: "#add8e6",
+    ghostwhite: "#f8f8ff",
+    honeydew: "#f0fff0",
+    cornflowerblue: "#6495ed",
+    slateblue: "#6a5acd",
+    linen: "#faf0e6",
+    darkblue: "#00008b",
+    powderblue: "#b0e0e6",
+    seagreen: "#2e8b57",
+    darkkhaki: "#bdb76b",
+    snow: "#fffafa",
+    sienna: "#a0522d",
+    mediumblue: "#0000cd",
+    royalblue: "#4169e1",
+    lightcyan: "#e0ffff",
+    green: "#008000",
+    mediumpurple: "#9370db",
+    midnightblue: "#191970",
+    cornsilk: "#fff8dc",
+    paleturquoise: "#afeeee",
+    bisque: "#ffe4c4",
+    slategray: "#708090",
+    darkcyan: "#008b8b",
+    khaki: "#f0e68c",
+    wheat: "#f5deb3",
+    teal: "#008080",
+    darkorchid: "#9932cc",
+    deepskyblue: "#00bfff",
+    salmon: "#fa8072",
+    darkred: "#8b0000",
+    steelblue: "#4682b4",
+    palevioletred: "#db7093",
+    lightslategray: "#778899",
+    aliceblue: "#f0f8ff",
+    lightslategrey: "#778899",
+    lightgreen: "#90ee90",
+    orchid: "#da70d6",
+    gainsboro: "#dcdcdc",
+    mediumseagreen: "#3cb371",
+    lightgray: "#d3d3d3",
+    mediumturquoise: "#48d1cc",
+    lemonchiffon: "#fffacd",
+    cadetblue: "#5f9ea0",
+    lightyellow: "#ffffe0",
+    lavenderblush: "#fff0f5",
+    coral: "#ff7f50",
+    purple: "#800080",
+    aqua: "#00ffff",
+    whitesmoke: "#f5f5f5",
+    mediumslateblue: "#7b68ee",
+    darkorange: "#ff8c00",
+    mediumaquamarine: "#66cdaa",
+    darksalmon: "#e9967a",
+    beige: "#f5f5dc",
+    blueviolet: "#8a2be2",
+    azure: "#f0ffff",
+    lightsteelblue: "#b0c4de",
+    oldlace: "#fdf5e6",
+    rebeccapurple: "#663399"
+  };
+
+  chroma.colors = colors = w3cx11;
+
+  lab2rgb = function() {
+    var a, args, b, g, l, r, x, y, z;
+    args = unpack(arguments);
+    l = args[0], a = args[1], b = args[2];
+    y = (l + 16) / 116;
+    x = isNaN(a) ? y : y + a / 500;
+    z = isNaN(b) ? y : y - b / 200;
+    y = LAB_CONSTANTS.Yn * lab_xyz(y);
+    x = LAB_CONSTANTS.Xn * lab_xyz(x);
+    z = LAB_CONSTANTS.Zn * lab_xyz(z);
+    r = xyz_rgb(3.2404542 * x - 1.5371385 * y - 0.4985314 * z);
+    g = xyz_rgb(-0.9692660 * x + 1.8760108 * y + 0.0415560 * z);
+    b = xyz_rgb(0.0556434 * x - 0.2040259 * y + 1.0572252 * z);
+    r = limit(r, 0, 255);
+    g = limit(g, 0, 255);
+    b = limit(b, 0, 255);
+    return [r, g, b, args.length > 3 ? args[3] : 1];
+  };
+
+  xyz_rgb = function(r) {
+    return round(255 * (r <= 0.00304 ? 12.92 * r : 1.055 * pow(r, 1 / 2.4) - 0.055));
+  };
+
+  lab_xyz = function(t) {
+    if (t > LAB_CONSTANTS.t1) {
+      return t * t * t;
+    } else {
+      return LAB_CONSTANTS.t2 * (t - LAB_CONSTANTS.t0);
+    }
+  };
+
+  LAB_CONSTANTS = {
+    Kn: 18,
+    Xn: 0.950470,
+    Yn: 1,
+    Zn: 1.088830,
+    t0: 0.137931034,
+    t1: 0.206896552,
+    t2: 0.12841855,
+    t3: 0.008856452
+  };
+
+  rgb2lab = function() {
+    var b, g, r, ref, ref1, x, y, z;
+    ref = unpack(arguments), r = ref[0], g = ref[1], b = ref[2];
+    ref1 = rgb2xyz(r, g, b), x = ref1[0], y = ref1[1], z = ref1[2];
+    return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
+  };
+
+  rgb_xyz = function(r) {
+    if ((r /= 255) <= 0.04045) {
+      return r / 12.92;
+    } else {
+      return pow((r + 0.055) / 1.055, 2.4);
+    }
+  };
+
+  xyz_lab = function(t) {
+    if (t > LAB_CONSTANTS.t3) {
+      return pow(t, 1 / 3);
+    } else {
+      return t / LAB_CONSTANTS.t2 + LAB_CONSTANTS.t0;
+    }
+  };
+
+  rgb2xyz = function() {
+    var b, g, r, ref, x, y, z;
+    ref = unpack(arguments), r = ref[0], g = ref[1], b = ref[2];
+    r = rgb_xyz(r);
+    g = rgb_xyz(g);
+    b = rgb_xyz(b);
+    x = xyz_lab((0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / LAB_CONSTANTS.Xn);
+    y = xyz_lab((0.2126729 * r + 0.7151522 * g + 0.0721750 * b) / LAB_CONSTANTS.Yn);
+    z = xyz_lab((0.0193339 * r + 0.1191920 * g + 0.9503041 * b) / LAB_CONSTANTS.Zn);
+    return [x, y, z];
+  };
+
+  chroma.lab = function() {
+    return (function(func, args, ctor) {
+      ctor.prototype = func.prototype;
+      var child = new ctor, result = func.apply(child, args);
+      return Object(result) === result ? result : child;
+    })(Color, slice.call(arguments).concat(['lab']), function(){});
+  };
+
+  _input.lab = lab2rgb;
+
+  Color.prototype.lab = function() {
+    return rgb2lab(this._rgb);
+  };
+
+  bezier = function(colors) {
+    var I, I0, I1, c, lab0, lab1, lab2, lab3, ref, ref1, ref2;
+    colors = (function() {
+      var len, o, results;
+      results = [];
+      for (o = 0, len = colors.length; o < len; o++) {
+        c = colors[o];
+        results.push(chroma(c));
+      }
+      return results;
+    })();
+    if (colors.length === 2) {
+      ref = (function() {
+        var len, o, results;
+        results = [];
+        for (o = 0, len = colors.length; o < len; o++) {
+          c = colors[o];
+          results.push(c.lab());
+        }
+        return results;
+      })(), lab0 = ref[0], lab1 = ref[1];
+      I = function(t) {
+        var i, lab;
+        lab = (function() {
+          var o, results;
+          results = [];
+          for (i = o = 0; o <= 2; i = ++o) {
+            results.push(lab0[i] + t * (lab1[i] - lab0[i]));
+          }
+          return results;
+        })();
+        return chroma.lab.apply(chroma, lab);
+      };
+    } else if (colors.length === 3) {
+      ref1 = (function() {
+        var len, o, results;
+        results = [];
+        for (o = 0, len = colors.length; o < len; o++) {
+          c = colors[o];
+          results.push(c.lab());
+        }
+        return results;
+      })(), lab0 = ref1[0], lab1 = ref1[1], lab2 = ref1[2];
+      I = function(t) {
+        var i, lab;
+        lab = (function() {
+          var o, results;
+          results = [];
+          for (i = o = 0; o <= 2; i = ++o) {
+            results.push((1 - t) * (1 - t) * lab0[i] + 2 * (1 - t) * t * lab1[i] + t * t * lab2[i]);
+          }
+          return results;
+        })();
+        return chroma.lab.apply(chroma, lab);
+      };
+    } else if (colors.length === 4) {
+      ref2 = (function() {
+        var len, o, results;
+        results = [];
+        for (o = 0, len = colors.length; o < len; o++) {
+          c = colors[o];
+          results.push(c.lab());
+        }
+        return results;
+      })(), lab0 = ref2[0], lab1 = ref2[1], lab2 = ref2[2], lab3 = ref2[3];
+      I = function(t) {
+        var i, lab;
+        lab = (function() {
+          var o, results;
+          results = [];
+          for (i = o = 0; o <= 2; i = ++o) {
+            results.push((1 - t) * (1 - t) * (1 - t) * lab0[i] + 3 * (1 - t) * (1 - t) * t * lab1[i] + 3 * (1 - t) * t * t * lab2[i] + t * t * t * lab3[i]);
+          }
+          return results;
+        })();
+        return chroma.lab.apply(chroma, lab);
+      };
+    } else if (colors.length === 5) {
+      I0 = bezier(colors.slice(0, 3));
+      I1 = bezier(colors.slice(2, 5));
+      I = function(t) {
+        if (t < 0.5) {
+          return I0(t * 2);
+        } else {
+          return I1((t - 0.5) * 2);
+        }
+      };
+    }
+    return I;
+  };
+
+  chroma.bezier = function(colors) {
+    var f;
+    f = bezier(colors);
+    f.scale = function() {
+      return chroma.scale(f);
+    };
+    return f;
+  };
+
+
+  /*
+      chroma.js
+  
+      Copyright (c) 2011-2013, Gregor Aisch
+      All rights reserved.
+  
+      Redistribution and use in source and binary forms, with or without
+      modification, are permitted provided that the following conditions are met:
+  
+      * Redistributions of source code must retain the above copyright notice, this
+        list of conditions and the following disclaimer.
+  
+      * Redistributions in binary form must reproduce the above copyright notice,
+        this list of conditions and the following disclaimer in the documentation
+        and/or other materials provided with the distribution.
+  
+      * The name Gregor Aisch may not be used to endorse or promote products
+        derived from this software without specific prior written permission.
+  
+      THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+      AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+      IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+      DISCLAIMED. IN NO EVENT SHALL GREGOR AISCH OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+      INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+      BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+      DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+      OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+      NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+      EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  
+      @source: https://github.com/gka/chroma.js
+   */
+
+  chroma.cubehelix = function(start, rotations, hue, gamma, lightness) {
+    var dh, dl, f;
+    if (start == null) {
+      start = 300;
+    }
+    if (rotations == null) {
+      rotations = -1.5;
+    }
+    if (hue == null) {
+      hue = 1;
+    }
+    if (gamma == null) {
+      gamma = 1;
+    }
+    if (lightness == null) {
+      lightness = [0, 1];
+    }
+    dl = lightness[1] - lightness[0];
+    dh = 0;
+    f = function(fract) {
+      var a, amp, b, cos_a, g, h, l, r, sin_a;
+      a = TWOPI * ((start + 120) / 360 + rotations * fract);
+      l = pow(lightness[0] + dl * fract, gamma);
+      h = dh !== 0 ? hue[0] + fract * dh : hue;
+      amp = h * l * (1 - l) / 2;
+      cos_a = cos(a);
+      sin_a = sin(a);
+      r = l + amp * (-0.14861 * cos_a + 1.78277 * sin_a);
+      g = l + amp * (-0.29227 * cos_a - 0.90649 * sin_a);
+      b = l + amp * (+1.97294 * cos_a);
+      return chroma(clip_rgb([r * 255, g * 255, b * 255]));
+    };
+    f.start = function(s) {
+      if (s == null) {
+        return start;
+      }
+      start = s;
+      return f;
+    };
+    f.rotations = function(r) {
+      if (r == null) {
+        return rotations;
+      }
+      rotations = r;
+      return f;
+    };
+    f.gamma = function(g) {
+      if (g == null) {
+        return gamma;
+      }
+      gamma = g;
+      return f;
+    };
+    f.hue = function(h) {
+      if (h == null) {
+        return hue;
+      }
+      hue = h;
+      if (type(hue) === 'array') {
+        dh = hue[1] - hue[0];
+        if (dh === 0) {
+          hue = hue[1];
+        }
+      } else {
+        dh = 0;
+      }
+      return f;
+    };
+    f.lightness = function(h) {
+      if (h == null) {
+        return lightness;
+      }
+      lightness = h;
+      if (type(lightness) === 'array') {
+        dl = lightness[1] - lightness[0];
+        if (dl === 0) {
+          lightness = lightness[1];
+        }
+      } else {
+        dl = 0;
+      }
+      return f;
+    };
+    f.scale = function() {
+      return chroma.scale(f);
+    };
+    f.hue(hue);
+    return f;
+  };
+
+  chroma.random = function() {
+    var code, digits, i, o;
+    digits = '0123456789abcdef';
+    code = '#';
+    for (i = o = 0; o < 6; i = ++o) {
+      code += digits.charAt(floor(Math.random() * 16));
+    }
+    return new Color(code);
+  };
+
+  _input.rgb = function() {
+    var k, ref, results, v;
+    ref = unpack(arguments);
+    results = [];
+    for (k in ref) {
+      v = ref[k];
+      results.push(v);
+    }
+    return results;
+  };
+
+  chroma.rgb = function() {
+    return (function(func, args, ctor) {
+      ctor.prototype = func.prototype;
+      var child = new ctor, result = func.apply(child, args);
+      return Object(result) === result ? result : child;
+    })(Color, slice.call(arguments).concat(['rgb']), function(){});
+  };
+
+  Color.prototype.rgb = function() {
+    return this._rgb.slice(0, 3);
+  };
+
+  Color.prototype.rgba = function() {
+    return this._rgb;
+  };
+
+  _guess_formats.push({
+    p: 15,
+    test: function(n) {
+      var a;
+      a = unpack(arguments);
+      if (type(a) === 'array' && a.length === 3) {
+        return 'rgb';
+      }
+      if (a.length === 4 && type(a[3]) === "number" && a[3] >= 0 && a[3] <= 1) {
+        return 'rgb';
+      }
+    }
+  });
+
+  hex2rgb = function(hex) {
+    var a, b, g, r, rgb, u;
+    if (hex.match(/^#?([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/)) {
+      if (hex.length === 4 || hex.length === 7) {
+        hex = hex.substr(1);
+      }
+      if (hex.length === 3) {
+        hex = hex.split("");
+        hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+      }
+      u = parseInt(hex, 16);
+      r = u >> 16;
+      g = u >> 8 & 0xFF;
+      b = u & 0xFF;
+      return [r, g, b, 1];
+    }
+    if (hex.match(/^#?([A-Fa-f0-9]{8})$/)) {
+      if (hex.length === 9) {
+        hex = hex.substr(1);
+      }
+      u = parseInt(hex, 16);
+      r = u >> 24 & 0xFF;
+      g = u >> 16 & 0xFF;
+      b = u >> 8 & 0xFF;
+      a = round((u & 0xFF) / 0xFF * 100) / 100;
+      return [r, g, b, a];
+    }
+    if ((_input.css != null) && (rgb = _input.css(hex))) {
+      return rgb;
+    }
+    throw "unknown color: " + hex;
+  };
+
+  rgb2hex = function(channels, mode) {
+    var a, b, g, hxa, r, str, u;
+    if (mode == null) {
+      mode = 'rgb';
+    }
+    r = channels[0], g = channels[1], b = channels[2], a = channels[3];
+    u = r << 16 | g << 8 | b;
+    str = "000000" + u.toString(16);
+    str = str.substr(str.length - 6);
+    hxa = '0' + round(a * 255).toString(16);
+    hxa = hxa.substr(hxa.length - 2);
+    return "#" + (function() {
+      switch (mode.toLowerCase()) {
+        case 'rgba':
+          return str + hxa;
+        case 'argb':
+          return hxa + str;
+        default:
+          return str;
+      }
+    })();
+  };
+
+  _input.hex = function(h) {
+    return hex2rgb(h);
+  };
+
+  chroma.hex = function() {
+    return (function(func, args, ctor) {
+      ctor.prototype = func.prototype;
+      var child = new ctor, result = func.apply(child, args);
+      return Object(result) === result ? result : child;
+    })(Color, slice.call(arguments).concat(['hex']), function(){});
+  };
+
+  Color.prototype.hex = function(mode) {
+    if (mode == null) {
+      mode = 'rgb';
+    }
+    return rgb2hex(this._rgb, mode);
+  };
+
+  _guess_formats.push({
+    p: 10,
+    test: function(n) {
+      if (arguments.length === 1 && type(n) === "string") {
+        return 'hex';
+      }
+    }
+  });
+
+  hsl2rgb = function() {
+    var args, b, c, g, h, i, l, o, r, ref, s, t1, t2, t3;
+    args = unpack(arguments);
+    h = args[0], s = args[1], l = args[2];
+    if (s === 0) {
+      r = g = b = l * 255;
+    } else {
+      t3 = [0, 0, 0];
+      c = [0, 0, 0];
+      t2 = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      t1 = 2 * l - t2;
+      h /= 360;
+      t3[0] = h + 1 / 3;
+      t3[1] = h;
+      t3[2] = h - 1 / 3;
+      for (i = o = 0; o <= 2; i = ++o) {
+        if (t3[i] < 0) {
+          t3[i] += 1;
+        }
+        if (t3[i] > 1) {
+          t3[i] -= 1;
+        }
+        if (6 * t3[i] < 1) {
+          c[i] = t1 + (t2 - t1) * 6 * t3[i];
+        } else if (2 * t3[i] < 1) {
+          c[i] = t2;
+        } else if (3 * t3[i] < 2) {
+          c[i] = t1 + (t2 - t1) * ((2 / 3) - t3[i]) * 6;
+        } else {
+          c[i] = t1;
+        }
+      }
+      ref = [round(c[0] * 255), round(c[1] * 255), round(c[2] * 255)], r = ref[0], g = ref[1], b = ref[2];
+    }
+    if (args.length > 3) {
+      return [r, g, b, args[3]];
+    } else {
+      return [r, g, b];
+    }
+  };
+
+  rgb2hsl = function(r, g, b) {
+    var h, l, min, ref, s;
+    if (r !== void 0 && r.length >= 3) {
+      ref = r, r = ref[0], g = ref[1], b = ref[2];
+    }
+    r /= 255;
+    g /= 255;
+    b /= 255;
+    min = Math.min(r, g, b);
+    max = Math.max(r, g, b);
+    l = (max + min) / 2;
+    if (max === min) {
+      s = 0;
+      h = Number.NaN;
+    } else {
+      s = l < 0.5 ? (max - min) / (max + min) : (max - min) / (2 - max - min);
+    }
+    if (r === max) {
+      h = (g - b) / (max - min);
+    } else if (g === max) {
+      h = 2 + (b - r) / (max - min);
+    } else if (b === max) {
+      h = 4 + (r - g) / (max - min);
+    }
+    h *= 60;
+    if (h < 0) {
+      h += 360;
+    }
+    return [h, s, l];
+  };
+
+  chroma.hsl = function() {
+    return (function(func, args, ctor) {
+      ctor.prototype = func.prototype;
+      var child = new ctor, result = func.apply(child, args);
+      return Object(result) === result ? result : child;
+    })(Color, slice.call(arguments).concat(['hsl']), function(){});
+  };
+
+  _input.hsl = hsl2rgb;
+
+  Color.prototype.hsl = function() {
+    return rgb2hsl(this._rgb);
+  };
+
+  hsv2rgb = function() {
+    var args, b, f, g, h, i, p, q, r, ref, ref1, ref2, ref3, ref4, ref5, s, t, v;
+    args = unpack(arguments);
+    h = args[0], s = args[1], v = args[2];
+    v *= 255;
+    if (s === 0) {
+      r = g = b = v;
+    } else {
+      if (h === 360) {
+        h = 0;
+      }
+      if (h > 360) {
+        h -= 360;
+      }
+      if (h < 0) {
+        h += 360;
+      }
+      h /= 60;
+      i = floor(h);
+      f = h - i;
+      p = v * (1 - s);
+      q = v * (1 - s * f);
+      t = v * (1 - s * (1 - f));
+      switch (i) {
+        case 0:
+          ref = [v, t, p], r = ref[0], g = ref[1], b = ref[2];
+          break;
+        case 1:
+          ref1 = [q, v, p], r = ref1[0], g = ref1[1], b = ref1[2];
+          break;
+        case 2:
+          ref2 = [p, v, t], r = ref2[0], g = ref2[1], b = ref2[2];
+          break;
+        case 3:
+          ref3 = [p, q, v], r = ref3[0], g = ref3[1], b = ref3[2];
+          break;
+        case 4:
+          ref4 = [t, p, v], r = ref4[0], g = ref4[1], b = ref4[2];
+          break;
+        case 5:
+          ref5 = [v, p, q], r = ref5[0], g = ref5[1], b = ref5[2];
+      }
+    }
+    r = round(r);
+    g = round(g);
+    b = round(b);
+    return [r, g, b, args.length > 3 ? args[3] : 1];
+  };
+
+  rgb2hsv = function() {
+    var b, delta, g, h, min, r, ref, s, v;
+    ref = unpack(arguments), r = ref[0], g = ref[1], b = ref[2];
+    min = Math.min(r, g, b);
+    max = Math.max(r, g, b);
+    delta = max - min;
+    v = max / 255.0;
+    if (max === 0) {
+      h = Number.NaN;
+      s = 0;
+    } else {
+      s = delta / max;
+      if (r === max) {
+        h = (g - b) / delta;
+      }
+      if (g === max) {
+        h = 2 + (b - r) / delta;
+      }
+      if (b === max) {
+        h = 4 + (r - g) / delta;
+      }
+      h *= 60;
+      if (h < 0) {
+        h += 360;
+      }
+    }
+    return [h, s, v];
+  };
+
+  chroma.hsv = function() {
+    return (function(func, args, ctor) {
+      ctor.prototype = func.prototype;
+      var child = new ctor, result = func.apply(child, args);
+      return Object(result) === result ? result : child;
+    })(Color, slice.call(arguments).concat(['hsv']), function(){});
+  };
+
+  _input.hsv = hsv2rgb;
+
+  Color.prototype.hsv = function() {
+    return rgb2hsv(this._rgb);
+  };
+
+  num2rgb = function(num) {
+    var b, g, r;
+    if (type(num) === "number" && num >= 0 && num <= 0xFFFFFF) {
+      r = num >> 16;
+      g = (num >> 8) & 0xFF;
+      b = num & 0xFF;
+      return [r, g, b, 1];
+    }
+    console.warn("unknown num color: " + num);
+    return [0, 0, 0, 1];
+  };
+
+  rgb2num = function() {
+    var b, g, r, ref;
+    ref = unpack(arguments), r = ref[0], g = ref[1], b = ref[2];
+    return (r << 16) + (g << 8) + b;
+  };
+
+  chroma.num = function(num) {
+    return new Color(num, 'num');
+  };
+
+  Color.prototype.num = function(mode) {
+    if (mode == null) {
+      mode = 'rgb';
+    }
+    return rgb2num(this._rgb, mode);
+  };
+
+  _input.num = num2rgb;
+
+  _guess_formats.push({
+    p: 10,
+    test: function(n) {
+      if (arguments.length === 1 && type(n) === "number" && n >= 0 && n <= 0xFFFFFF) {
+        return 'num';
+      }
+    }
+  });
+
+  css2rgb = function(css) {
+    var aa, ab, hsl, i, m, o, rgb, w;
+    css = css.toLowerCase();
+    if ((chroma.colors != null) && chroma.colors[css]) {
+      return hex2rgb(chroma.colors[css]);
+    }
+    if (m = css.match(/rgb\(\s*(\-?\d+),\s*(\-?\d+)\s*,\s*(\-?\d+)\s*\)/)) {
+      rgb = m.slice(1, 4);
+      for (i = o = 0; o <= 2; i = ++o) {
+        rgb[i] = +rgb[i];
+      }
+      rgb[3] = 1;
+    } else if (m = css.match(/rgba\(\s*(\-?\d+),\s*(\-?\d+)\s*,\s*(\-?\d+)\s*,\s*([01]|[01]?\.\d+)\)/)) {
+      rgb = m.slice(1, 5);
+      for (i = w = 0; w <= 3; i = ++w) {
+        rgb[i] = +rgb[i];
+      }
+    } else if (m = css.match(/rgb\(\s*(\-?\d+(?:\.\d+)?)%,\s*(\-?\d+(?:\.\d+)?)%\s*,\s*(\-?\d+(?:\.\d+)?)%\s*\)/)) {
+      rgb = m.slice(1, 4);
+      for (i = aa = 0; aa <= 2; i = ++aa) {
+        rgb[i] = round(rgb[i] * 2.55);
+      }
+      rgb[3] = 1;
+    } else if (m = css.match(/rgba\(\s*(\-?\d+(?:\.\d+)?)%,\s*(\-?\d+(?:\.\d+)?)%\s*,\s*(\-?\d+(?:\.\d+)?)%\s*,\s*([01]|[01]?\.\d+)\)/)) {
+      rgb = m.slice(1, 5);
+      for (i = ab = 0; ab <= 2; i = ++ab) {
+        rgb[i] = round(rgb[i] * 2.55);
+      }
+      rgb[3] = +rgb[3];
+    } else if (m = css.match(/hsl\(\s*(\-?\d+(?:\.\d+)?),\s*(\-?\d+(?:\.\d+)?)%\s*,\s*(\-?\d+(?:\.\d+)?)%\s*\)/)) {
+      hsl = m.slice(1, 4);
+      hsl[1] *= 0.01;
+      hsl[2] *= 0.01;
+      rgb = hsl2rgb(hsl);
+      rgb[3] = 1;
+    } else if (m = css.match(/hsla\(\s*(\-?\d+(?:\.\d+)?),\s*(\-?\d+(?:\.\d+)?)%\s*,\s*(\-?\d+(?:\.\d+)?)%\s*,\s*([01]|[01]?\.\d+)\)/)) {
+      hsl = m.slice(1, 4);
+      hsl[1] *= 0.01;
+      hsl[2] *= 0.01;
+      rgb = hsl2rgb(hsl);
+      rgb[3] = +m[4];
+    }
+    return rgb;
+  };
+
+  rgb2css = function(rgba) {
+    var mode;
+    mode = rgba[3] < 1 ? 'rgba' : 'rgb';
+    if (mode === 'rgb') {
+      return mode + '(' + rgba.slice(0, 3).map(round).join(',') + ')';
+    } else if (mode === 'rgba') {
+      return mode + '(' + rgba.slice(0, 3).map(round).join(',') + ',' + rgba[3] + ')';
+    } else {
+
+    }
+  };
+
+  rnd = function(a) {
+    return round(a * 100) / 100;
+  };
+
+  hsl2css = function(hsl, alpha) {
+    var mode;
+    mode = alpha < 1 ? 'hsla' : 'hsl';
+    hsl[0] = rnd(hsl[0] || 0);
+    hsl[1] = rnd(hsl[1] * 100) + '%';
+    hsl[2] = rnd(hsl[2] * 100) + '%';
+    if (mode === 'hsla') {
+      hsl[3] = alpha;
+    }
+    return mode + '(' + hsl.join(',') + ')';
+  };
+
+  _input.css = function(h) {
+    return css2rgb(h);
+  };
+
+  chroma.css = function() {
+    return (function(func, args, ctor) {
+      ctor.prototype = func.prototype;
+      var child = new ctor, result = func.apply(child, args);
+      return Object(result) === result ? result : child;
+    })(Color, slice.call(arguments).concat(['css']), function(){});
+  };
+
+  Color.prototype.css = function(mode) {
+    if (mode == null) {
+      mode = 'rgb';
+    }
+    if (mode.slice(0, 3) === 'rgb') {
+      return rgb2css(this._rgb);
+    } else if (mode.slice(0, 3) === 'hsl') {
+      return hsl2css(this.hsl(), this.alpha());
+    }
+  };
+
+  _input.named = function(name) {
+    return hex2rgb(w3cx11[name]);
+  };
+
+  _guess_formats.push({
+    p: 20,
+    test: function(n) {
+      if (arguments.length === 1 && (w3cx11[n] != null)) {
+        return 'named';
+      }
+    }
+  });
+
+  Color.prototype.name = function(n) {
+    var h, k;
+    if (arguments.length) {
+      if (w3cx11[n]) {
+        this._rgb = hex2rgb(w3cx11[n]);
+      }
+      this._rgb[3] = 1;
+      this;
+    }
+    h = this.hex();
+    for (k in w3cx11) {
+      if (h === w3cx11[k]) {
+        return k;
+      }
+    }
+    return h;
+  };
+
+  lch2lab = function() {
+
+    /*
+    Convert from a qualitative parameter h and a quantitative parameter l to a 24-bit pixel.
+    These formulas were invented by David Dalrymple to obtain maximum contrast without going
+    out of gamut if the parameters are in the range 0-1.
+    
+    A saturation multiplier was added by Gregor Aisch
+     */
+    var c, h, l, ref;
+    ref = unpack(arguments), l = ref[0], c = ref[1], h = ref[2];
+    h = h * DEG2RAD;
+    return [l, cos(h) * c, sin(h) * c];
+  };
+
+  lch2rgb = function() {
+    var L, a, args, b, c, g, h, l, r, ref, ref1;
+    args = unpack(arguments);
+    l = args[0], c = args[1], h = args[2];
+    ref = lch2lab(l, c, h), L = ref[0], a = ref[1], b = ref[2];
+    ref1 = lab2rgb(L, a, b), r = ref1[0], g = ref1[1], b = ref1[2];
+    return [limit(r, 0, 255), limit(g, 0, 255), limit(b, 0, 255), args.length > 3 ? args[3] : 1];
+  };
+
+  lab2lch = function() {
+    var a, b, c, h, l, ref;
+    ref = unpack(arguments), l = ref[0], a = ref[1], b = ref[2];
+    c = sqrt(a * a + b * b);
+    h = (atan2(b, a) * RAD2DEG + 360) % 360;
+    if (round(c * 10000) === 0) {
+      h = Number.NaN;
+    }
+    return [l, c, h];
+  };
+
+  rgb2lch = function() {
+    var a, b, g, l, r, ref, ref1;
+    ref = unpack(arguments), r = ref[0], g = ref[1], b = ref[2];
+    ref1 = rgb2lab(r, g, b), l = ref1[0], a = ref1[1], b = ref1[2];
+    return lab2lch(l, a, b);
+  };
+
+  chroma.lch = function() {
+    var args;
+    args = unpack(arguments);
+    return new Color(args, 'lch');
+  };
+
+  chroma.hcl = function() {
+    var args;
+    args = unpack(arguments);
+    return new Color(args, 'hcl');
+  };
+
+  _input.lch = lch2rgb;
+
+  _input.hcl = function() {
+    var c, h, l, ref;
+    ref = unpack(arguments), h = ref[0], c = ref[1], l = ref[2];
+    return lch2rgb([l, c, h]);
+  };
+
+  Color.prototype.lch = function() {
+    return rgb2lch(this._rgb);
+  };
+
+  Color.prototype.hcl = function() {
+    return rgb2lch(this._rgb).reverse();
+  };
+
+  rgb2cmyk = function(mode) {
+    var b, c, f, g, k, m, r, ref, y;
+    if (mode == null) {
+      mode = 'rgb';
+    }
+    ref = unpack(arguments), r = ref[0], g = ref[1], b = ref[2];
+    r = r / 255;
+    g = g / 255;
+    b = b / 255;
+    k = 1 - Math.max(r, Math.max(g, b));
+    f = k < 1 ? 1 / (1 - k) : 0;
+    c = (1 - r - k) * f;
+    m = (1 - g - k) * f;
+    y = (1 - b - k) * f;
+    return [c, m, y, k];
+  };
+
+  cmyk2rgb = function() {
+    var alpha, args, b, c, g, k, m, r, y;
+    args = unpack(arguments);
+    c = args[0], m = args[1], y = args[2], k = args[3];
+    alpha = args.length > 4 ? args[4] : 1;
+    if (k === 1) {
+      return [0, 0, 0, alpha];
+    }
+    r = c >= 1 ? 0 : round(255 * (1 - c) * (1 - k));
+    g = m >= 1 ? 0 : round(255 * (1 - m) * (1 - k));
+    b = y >= 1 ? 0 : round(255 * (1 - y) * (1 - k));
+    return [r, g, b, alpha];
+  };
+
+  _input.cmyk = function() {
+    return cmyk2rgb(unpack(arguments));
+  };
+
+  chroma.cmyk = function() {
+    return (function(func, args, ctor) {
+      ctor.prototype = func.prototype;
+      var child = new ctor, result = func.apply(child, args);
+      return Object(result) === result ? result : child;
+    })(Color, slice.call(arguments).concat(['cmyk']), function(){});
+  };
+
+  Color.prototype.cmyk = function() {
+    return rgb2cmyk(this._rgb);
+  };
+
+  _input.gl = function() {
+    var i, k, o, rgb, v;
+    rgb = (function() {
+      var ref, results;
+      ref = unpack(arguments);
+      results = [];
+      for (k in ref) {
+        v = ref[k];
+        results.push(v);
+      }
+      return results;
+    }).apply(this, arguments);
+    for (i = o = 0; o <= 2; i = ++o) {
+      rgb[i] *= 255;
+    }
+    return rgb;
+  };
+
+  chroma.gl = function() {
+    return (function(func, args, ctor) {
+      ctor.prototype = func.prototype;
+      var child = new ctor, result = func.apply(child, args);
+      return Object(result) === result ? result : child;
+    })(Color, slice.call(arguments).concat(['gl']), function(){});
+  };
+
+  Color.prototype.gl = function() {
+    var rgb;
+    rgb = this._rgb;
+    return [rgb[0] / 255, rgb[1] / 255, rgb[2] / 255, rgb[3]];
+  };
+
+  rgb2luminance = function(r, g, b) {
+    var ref;
+    ref = unpack(arguments), r = ref[0], g = ref[1], b = ref[2];
+    r = luminance_x(r);
+    g = luminance_x(g);
+    b = luminance_x(b);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+
+  luminance_x = function(x) {
+    x /= 255;
+    if (x <= 0.03928) {
+      return x / 12.92;
+    } else {
+      return pow((x + 0.055) / 1.055, 2.4);
+    }
+  };
+
+  _interpolators = [];
+
+  interpolate = function(col1, col2, f, m) {
+    var interpol, len, o, res;
+    if (f == null) {
+      f = 0.5;
+    }
+    if (m == null) {
+      m = 'rgb';
+    }
+
+    /*
+    interpolates between colors
+    f = 0 --> me
+    f = 1 --> col
+     */
+    if (type(col1) !== 'object') {
+      col1 = chroma(col1);
+    }
+    if (type(col2) !== 'object') {
+      col2 = chroma(col2);
+    }
+    for (o = 0, len = _interpolators.length; o < len; o++) {
+      interpol = _interpolators[o];
+      if (m === interpol[0]) {
+        res = interpol[1](col1, col2, f, m);
+        break;
+      }
+    }
+    if (res == null) {
+      throw "color mode " + m + " is not supported";
+    }
+    res.alpha(col1.alpha() + f * (col2.alpha() - col1.alpha()));
+    return res;
+  };
+
+  chroma.interpolate = interpolate;
+
+  Color.prototype.interpolate = function(col2, f, m) {
+    return interpolate(this, col2, f, m);
+  };
+
+  chroma.mix = interpolate;
+
+  Color.prototype.mix = Color.prototype.interpolate;
+
+  interpolate_rgb = function(col1, col2, f, m) {
+    var xyz0, xyz1;
+    xyz0 = col1._rgb;
+    xyz1 = col2._rgb;
+    return new Color(xyz0[0] + f * (xyz1[0] - xyz0[0]), xyz0[1] + f * (xyz1[1] - xyz0[1]), xyz0[2] + f * (xyz1[2] - xyz0[2]), m);
+  };
+
+  _interpolators.push(['rgb', interpolate_rgb]);
+
+  Color.prototype.luminance = function(lum, mode) {
+    var cur_lum, eps, max_iter, test;
+    if (mode == null) {
+      mode = 'rgb';
+    }
+    if (!arguments.length) {
+      return rgb2luminance(this._rgb);
+    }
+    if (lum === 0) {
+      this._rgb = [0, 0, 0, this._rgb[3]];
+    } else if (lum === 1) {
+      this._rgb = [255, 255, 255, this._rgb[3]];
+    } else {
+      eps = 1e-7;
+      max_iter = 20;
+      test = function(l, h) {
+        var lm, m;
+        m = l.interpolate(h, 0.5, mode);
+        lm = m.luminance();
+        if (Math.abs(lum - lm) < eps || !max_iter--) {
+          return m;
+        }
+        if (lm > lum) {
+          return test(l, m);
+        }
+        return test(m, h);
+      };
+      cur_lum = rgb2luminance(this._rgb);
+      this._rgb = (cur_lum > lum ? test(chroma('black'), this) : test(this, chroma('white'))).rgba();
+    }
+    return this;
+  };
+
+  temperature2rgb = function(kelvin) {
+    var b, g, r, temp;
+    temp = kelvin / 100;
+    if (temp < 66) {
+      r = 255;
+      g = -155.25485562709179 - 0.44596950469579133 * (g = temp - 2) + 104.49216199393888 * log(g);
+      b = temp < 20 ? 0 : -254.76935184120902 + 0.8274096064007395 * (b = temp - 10) + 115.67994401066147 * log(b);
+    } else {
+      r = 351.97690566805693 + 0.114206453784165 * (r = temp - 55) - 40.25366309332127 * log(r);
+      g = 325.4494125711974 + 0.07943456536662342 * (g = temp - 50) - 28.0852963507957 * log(g);
+      b = 255;
+    }
+    return clip_rgb([r, g, b]);
+  };
+
+  rgb2temperature = function() {
+    var b, eps, g, maxTemp, minTemp, r, ref, rgb, temp;
+    ref = unpack(arguments), r = ref[0], g = ref[1], b = ref[2];
+    minTemp = 1000;
+    maxTemp = 40000;
+    eps = 0.4;
+    while (maxTemp - minTemp > eps) {
+      temp = (maxTemp + minTemp) * 0.5;
+      rgb = temperature2rgb(temp);
+      if ((rgb[2] / rgb[0]) >= (b / r)) {
+        maxTemp = temp;
+      } else {
+        minTemp = temp;
+      }
+    }
+    return round(temp);
+  };
+
+  chroma.temperature = chroma.kelvin = function() {
+    return (function(func, args, ctor) {
+      ctor.prototype = func.prototype;
+      var child = new ctor, result = func.apply(child, args);
+      return Object(result) === result ? result : child;
+    })(Color, slice.call(arguments).concat(['temperature']), function(){});
+  };
+
+  _input.temperature = _input.kelvin = _input.K = temperature2rgb;
+
+  Color.prototype.temperature = function() {
+    return rgb2temperature(this._rgb);
+  };
+
+  Color.prototype.kelvin = Color.prototype.temperature;
+
+  chroma.contrast = function(a, b) {
+    var l1, l2, ref, ref1;
+    if ((ref = type(a)) === 'string' || ref === 'number') {
+      a = new Color(a);
+    }
+    if ((ref1 = type(b)) === 'string' || ref1 === 'number') {
+      b = new Color(b);
+    }
+    l1 = a.luminance();
+    l2 = b.luminance();
+    if (l1 > l2) {
+      return (l1 + 0.05) / (l2 + 0.05);
+    } else {
+      return (l2 + 0.05) / (l1 + 0.05);
+    }
+  };
+
+  Color.prototype.get = function(modechan) {
+    var channel, i, me, mode, ref, src;
+    me = this;
+    ref = modechan.split('.'), mode = ref[0], channel = ref[1];
+    src = me[mode]();
+    if (channel) {
+      i = mode.indexOf(channel);
+      if (i > -1) {
+        return src[i];
+      } else {
+        return console.warn('unknown channel ' + channel + ' in mode ' + mode);
+      }
+    } else {
+      return src;
+    }
+  };
+
+  Color.prototype.set = function(modechan, value) {
+    var channel, i, me, mode, ref, src;
+    me = this;
+    ref = modechan.split('.'), mode = ref[0], channel = ref[1];
+    if (channel) {
+      src = me[mode]();
+      i = mode.indexOf(channel);
+      if (i > -1) {
+        if (type(value) === 'string') {
+          switch (value.charAt(0)) {
+            case '+':
+              src[i] += +value;
+              break;
+            case '-':
+              src[i] += +value;
+              break;
+            case '*':
+              src[i] *= +(value.substr(1));
+              break;
+            case '/':
+              src[i] /= +(value.substr(1));
+              break;
+            default:
+              src[i] = +value;
+          }
+        } else {
+          src[i] = value;
+        }
+      } else {
+        console.warn('unknown channel ' + channel + ' in mode ' + mode);
+      }
+    } else {
+      src = value;
+    }
+    me._rgb = chroma(src, mode).alpha(me.alpha())._rgb;
+    return me;
+  };
+
+  Color.prototype.darken = function(amount) {
+    var lab, me;
+    if (amount == null) {
+      amount = 1;
+    }
+    me = this;
+    lab = me.lab();
+    lab[0] -= LAB_CONSTANTS.Kn * amount;
+    return chroma.lab(lab).alpha(me.alpha());
+  };
+
+  Color.prototype.brighten = function(amount) {
+    if (amount == null) {
+      amount = 1;
+    }
+    return this.darken(-amount);
+  };
+
+  Color.prototype.darker = Color.prototype.darken;
+
+  Color.prototype.brighter = Color.prototype.brighten;
+
+  Color.prototype.saturate = function(amount) {
+    var lch, me;
+    if (amount == null) {
+      amount = 1;
+    }
+    me = this;
+    lch = me.lch();
+    lch[1] += amount * LAB_CONSTANTS.Kn;
+    if (lch[1] < 0) {
+      lch[1] = 0;
+    }
+    return chroma.lch(lch).alpha(me.alpha());
+  };
+
+  Color.prototype.desaturate = function(amount) {
+    if (amount == null) {
+      amount = 1;
+    }
+    return this.saturate(-amount);
+  };
+
+  Color.prototype.premultiply = function() {
+    var a, rgb;
+    rgb = this.rgb();
+    a = this.alpha();
+    return chroma(rgb[0] * a, rgb[1] * a, rgb[2] * a, a);
+  };
+
+  blend = function(bottom, top, mode) {
+    if (!blend[mode]) {
+      throw 'unknown blend mode ' + mode;
+    }
+    return blend[mode](bottom, top);
+  };
+
+  blend_f = function(f) {
+    return function(bottom, top) {
+      var c0, c1;
+      c0 = chroma(top).rgb();
+      c1 = chroma(bottom).rgb();
+      return chroma(f(c0, c1), 'rgb');
+    };
+  };
+
+  each = function(f) {
+    return function(c0, c1) {
+      var i, o, out;
+      out = [];
+      for (i = o = 0; o <= 3; i = ++o) {
+        out[i] = f(c0[i], c1[i]);
+      }
+      return out;
+    };
+  };
+
+  normal = function(a, b) {
+    return a;
+  };
+
+  multiply = function(a, b) {
+    return a * b / 255;
+  };
+
+  darken = function(a, b) {
+    if (a > b) {
+      return b;
+    } else {
+      return a;
+    }
+  };
+
+  lighten = function(a, b) {
+    if (a > b) {
+      return a;
+    } else {
+      return b;
+    }
+  };
+
+  screen = function(a, b) {
+    return 255 * (1 - (1 - a / 255) * (1 - b / 255));
+  };
+
+  overlay = function(a, b) {
+    if (b < 128) {
+      return 2 * a * b / 255;
+    } else {
+      return 255 * (1 - 2 * (1 - a / 255) * (1 - b / 255));
+    }
+  };
+
+  burn = function(a, b) {
+    return 255 * (1 - (1 - b / 255) / (a / 255));
+  };
+
+  dodge = function(a, b) {
+    if (a === 255) {
+      return 255;
+    }
+    a = 255 * (b / 255) / (1 - a / 255);
+    if (a > 255) {
+      return 255;
+    } else {
+      return a;
+    }
+  };
+
+  blend.normal = blend_f(each(normal));
+
+  blend.multiply = blend_f(each(multiply));
+
+  blend.screen = blend_f(each(screen));
+
+  blend.overlay = blend_f(each(overlay));
+
+  blend.darken = blend_f(each(darken));
+
+  blend.lighten = blend_f(each(lighten));
+
+  blend.dodge = blend_f(each(dodge));
+
+  blend.burn = blend_f(each(burn));
+
+  chroma.blend = blend;
+
+  chroma.analyze = function(data) {
+    var len, o, r, val;
+    r = {
+      min: Number.MAX_VALUE,
+      max: Number.MAX_VALUE * -1,
+      sum: 0,
+      values: [],
+      count: 0
+    };
+    for (o = 0, len = data.length; o < len; o++) {
+      val = data[o];
+      if ((val != null) && !isNaN(val)) {
+        r.values.push(val);
+        r.sum += val;
+        if (val < r.min) {
+          r.min = val;
+        }
+        if (val > r.max) {
+          r.max = val;
+        }
+        r.count += 1;
+      }
+    }
+    r.domain = [r.min, r.max];
+    r.limits = function(mode, num) {
+      return chroma.limits(r, mode, num);
+    };
+    return r;
+  };
+
+  chroma.scale = function(colors, positions) {
+    var _classes, _colorCache, _colors, _correctLightness, _domain, _fixed, _max, _min, _mode, _nacol, _out, _padding, _pos, _spread, classifyValue, f, getClass, getColor, resetCache, setColors, tmap;
+    _mode = 'rgb';
+    _nacol = chroma('#ccc');
+    _spread = 0;
+    _fixed = false;
+    _domain = [0, 1];
+    _pos = [];
+    _padding = [0, 0];
+    _classes = false;
+    _colors = [];
+    _out = false;
+    _min = 0;
+    _max = 1;
+    _correctLightness = false;
+    _colorCache = {};
+    setColors = function(colors) {
+      var c, col, o, ref, ref1, ref2, w;
+      if (colors == null) {
+        colors = ['#fff', '#000'];
+      }
+      if ((colors != null) && type(colors) === 'string' && (((ref = chroma.brewer) != null ? ref[colors] : void 0) != null)) {
+        colors = chroma.brewer[colors];
+      }
+      if (type(colors) === 'array') {
+        colors = colors.slice(0);
+        for (c = o = 0, ref1 = colors.length - 1; 0 <= ref1 ? o <= ref1 : o >= ref1; c = 0 <= ref1 ? ++o : --o) {
+          col = colors[c];
+          if (type(col) === "string") {
+            colors[c] = chroma(col);
+          }
+        }
+        _pos.length = 0;
+        for (c = w = 0, ref2 = colors.length - 1; 0 <= ref2 ? w <= ref2 : w >= ref2; c = 0 <= ref2 ? ++w : --w) {
+          _pos.push(c / (colors.length - 1));
+        }
+      }
+      resetCache();
+      return _colors = colors;
+    };
+    getClass = function(value) {
+      var i, n;
+      if (_classes != null) {
+        n = _classes.length - 1;
+        i = 0;
+        while (i < n && value >= _classes[i]) {
+          i++;
+        }
+        return i - 1;
+      }
+      return 0;
+    };
+    tmap = function(t) {
+      return t;
+    };
+    classifyValue = function(value) {
+      var i, maxc, minc, n, val;
+      val = value;
+      if (_classes.length > 2) {
+        n = _classes.length - 1;
+        i = getClass(value);
+        minc = _classes[0] + (_classes[1] - _classes[0]) * (0 + _spread * 0.5);
+        maxc = _classes[n - 1] + (_classes[n] - _classes[n - 1]) * (1 - _spread * 0.5);
+        val = _min + ((_classes[i] + (_classes[i + 1] - _classes[i]) * 0.5 - minc) / (maxc - minc)) * (_max - _min);
+      }
+      return val;
+    };
+    getColor = function(val, bypassMap) {
+      var c, col, i, k, o, p, ref, t;
+      if (bypassMap == null) {
+        bypassMap = false;
+      }
+      if (isNaN(val)) {
+        return _nacol;
+      }
+      if (!bypassMap) {
+        if (_classes && _classes.length > 2) {
+          c = getClass(val);
+          t = c / (_classes.length - 2);
+          t = _padding[0] + (t * (1 - _padding[0] - _padding[1]));
+        } else if (_max !== _min) {
+          t = (val - _min) / (_max - _min);
+          t = _padding[0] + (t * (1 - _padding[0] - _padding[1]));
+          t = Math.min(1, Math.max(0, t));
+        } else {
+          t = 1;
+        }
+      } else {
+        t = val;
+      }
+      if (!bypassMap) {
+        t = tmap(t);
+      }
+      k = Math.floor(t * 10000);
+      if (_colorCache[k]) {
+        col = _colorCache[k];
+      } else {
+        if (type(_colors) === 'array') {
+          for (i = o = 0, ref = _pos.length - 1; 0 <= ref ? o <= ref : o >= ref; i = 0 <= ref ? ++o : --o) {
+            p = _pos[i];
+            if (t <= p) {
+              col = _colors[i];
+              break;
+            }
+            if (t >= p && i === _pos.length - 1) {
+              col = _colors[i];
+              break;
+            }
+            if (t > p && t < _pos[i + 1]) {
+              t = (t - p) / (_pos[i + 1] - p);
+              col = chroma.interpolate(_colors[i], _colors[i + 1], t, _mode);
+              break;
+            }
+          }
+        } else if (type(_colors) === 'function') {
+          col = _colors(t);
+        }
+        _colorCache[k] = col;
+      }
+      return col;
+    };
+    resetCache = function() {
+      return _colorCache = {};
+    };
+    setColors(colors);
+    f = function(v) {
+      var c;
+      c = chroma(getColor(v));
+      if (_out && c[_out]) {
+        return c[_out]();
+      } else {
+        return c;
+      }
+    };
+    f.classes = function(classes) {
+      var d;
+      if (classes != null) {
+        if (type(classes) === 'array') {
+          _classes = classes;
+          _domain = [classes[0], classes[classes.length - 1]];
+        } else {
+          d = chroma.analyze(_domain);
+          if (classes === 0) {
+            _classes = [d.min, d.max];
+          } else {
+            _classes = chroma.limits(d, 'e', classes);
+          }
+        }
+        return f;
+      }
+      return _classes;
+    };
+    f.domain = function(domain) {
+      var c, d, k, len, o, ref, w;
+      if (!arguments.length) {
+        return _domain;
+      }
+      _min = domain[0];
+      _max = domain[domain.length - 1];
+      _pos = [];
+      k = _colors.length;
+      if (domain.length === k && _min !== _max) {
+        for (o = 0, len = domain.length; o < len; o++) {
+          d = domain[o];
+          _pos.push((d - _min) / (_max - _min));
+        }
+      } else {
+        for (c = w = 0, ref = k - 1; 0 <= ref ? w <= ref : w >= ref; c = 0 <= ref ? ++w : --w) {
+          _pos.push(c / (k - 1));
+        }
+      }
+      _domain = [_min, _max];
+      return f;
+    };
+    f.mode = function(_m) {
+      if (!arguments.length) {
+        return _mode;
+      }
+      _mode = _m;
+      resetCache();
+      return f;
+    };
+    f.range = function(colors, _pos) {
+      setColors(colors, _pos);
+      return f;
+    };
+    f.out = function(_o) {
+      _out = _o;
+      return f;
+    };
+    f.spread = function(val) {
+      if (!arguments.length) {
+        return _spread;
+      }
+      _spread = val;
+      return f;
+    };
+    f.correctLightness = function(v) {
+      if (v == null) {
+        v = true;
+      }
+      _correctLightness = v;
+      resetCache();
+      if (_correctLightness) {
+        tmap = function(t) {
+          var L0, L1, L_actual, L_diff, L_ideal, max_iter, pol, t0, t1;
+          L0 = getColor(0, true).lab()[0];
+          L1 = getColor(1, true).lab()[0];
+          pol = L0 > L1;
+          L_actual = getColor(t, true).lab()[0];
+          L_ideal = L0 + (L1 - L0) * t;
+          L_diff = L_actual - L_ideal;
+          t0 = 0;
+          t1 = 1;
+          max_iter = 20;
+          while (Math.abs(L_diff) > 1e-2 && max_iter-- > 0) {
+            (function() {
+              if (pol) {
+                L_diff *= -1;
+              }
+              if (L_diff < 0) {
+                t0 = t;
+                t += (t1 - t) * 0.5;
+              } else {
+                t1 = t;
+                t += (t0 - t) * 0.5;
+              }
+              L_actual = getColor(t, true).lab()[0];
+              return L_diff = L_actual - L_ideal;
+            })();
+          }
+          return t;
+        };
+      } else {
+        tmap = function(t) {
+          return t;
+        };
+      }
+      return f;
+    };
+    f.padding = function(p) {
+      if (p != null) {
+        if (type(p) === 'number') {
+          p = [p, p];
+        }
+        _padding = p;
+        return f;
+      } else {
+        return _padding;
+      }
+    };
+    f.colors = function() {
+      var dd, dm, i, numColors, o, out, ref, results, samples, w;
+      numColors = 0;
+      out = 'hex';
+      if (arguments.length === 1) {
+        if (type(arguments[0]) === 'string') {
+          out = arguments[0];
+        } else {
+          numColors = arguments[0];
+        }
+      }
+      if (arguments.length === 2) {
+        numColors = arguments[0], out = arguments[1];
+      }
+      if (numColors) {
+        dm = _domain[0];
+        dd = _domain[1] - dm;
+        return (function() {
+          results = [];
+          for (var o = 0; 0 <= numColors ? o < numColors : o > numColors; 0 <= numColors ? o++ : o--){ results.push(o); }
+          return results;
+        }).apply(this).map(function(i) {
+          return f(dm + i / (numColors - 1) * dd)[out]();
+        });
+      }
+      colors = [];
+      samples = [];
+      if (_classes && _classes.length > 2) {
+        for (i = w = 1, ref = _classes.length; 1 <= ref ? w < ref : w > ref; i = 1 <= ref ? ++w : --w) {
+          samples.push((_classes[i - 1] + _classes[i]) * 0.5);
+        }
+      } else {
+        samples = _domain;
+      }
+      return samples.map(function(v) {
+        return f(v)[out]();
+      });
+    };
+    return f;
+  };
+
+  if (chroma.scales == null) {
+    chroma.scales = {};
+  }
+
+  chroma.scales.cool = function() {
+    return chroma.scale([chroma.hsl(180, 1, .9), chroma.hsl(250, .7, .4)]);
+  };
+
+  chroma.scales.hot = function() {
+    return chroma.scale(['#000', '#f00', '#ff0', '#fff'], [0, .25, .75, 1]).mode('rgb');
+  };
+
+  chroma.analyze = function(data, key, filter) {
+    var add, k, len, o, r, val, visit;
+    r = {
+      min: Number.MAX_VALUE,
+      max: Number.MAX_VALUE * -1,
+      sum: 0,
+      values: [],
+      count: 0
+    };
+    if (filter == null) {
+      filter = function() {
+        return true;
+      };
+    }
+    add = function(val) {
+      if ((val != null) && !isNaN(val)) {
+        r.values.push(val);
+        r.sum += val;
+        if (val < r.min) {
+          r.min = val;
+        }
+        if (val > r.max) {
+          r.max = val;
+        }
+        r.count += 1;
+      }
+    };
+    visit = function(val, k) {
+      if (filter(val, k)) {
+        if ((key != null) && type(key) === 'function') {
+          return add(key(val));
+        } else if ((key != null) && type(key) === 'string' || type(key) === 'number') {
+          return add(val[key]);
+        } else {
+          return add(val);
+        }
+      }
+    };
+    if (type(data) === 'array') {
+      for (o = 0, len = data.length; o < len; o++) {
+        val = data[o];
+        visit(val);
+      }
+    } else {
+      for (k in data) {
+        val = data[k];
+        visit(val, k);
+      }
+    }
+    r.domain = [r.min, r.max];
+    r.limits = function(mode, num) {
+      return chroma.limits(r, mode, num);
+    };
+    return r;
+  };
+
+  chroma.limits = function(data, mode, num) {
+    var aa, ab, ac, ad, ae, af, ag, ah, ai, aj, ak, al, am, assignments, best, centroids, cluster, clusterSizes, dist, i, j, kClusters, limits, max_log, min, min_log, mindist, n, nb_iters, newCentroids, o, p, pb, pr, ref, ref1, ref10, ref11, ref12, ref13, ref14, ref2, ref3, ref4, ref5, ref6, ref7, ref8, ref9, repeat, sum, tmpKMeansBreaks, value, values, w;
+    if (mode == null) {
+      mode = 'equal';
+    }
+    if (num == null) {
+      num = 7;
+    }
+    if (type(data) === 'array') {
+      data = chroma.analyze(data);
+    }
+    min = data.min;
+    max = data.max;
+    sum = data.sum;
+    values = data.values.sort(function(a, b) {
+      return a - b;
+    });
+    limits = [];
+    if (mode.substr(0, 1) === 'c') {
+      limits.push(min);
+      limits.push(max);
+    }
+    if (mode.substr(0, 1) === 'e') {
+      limits.push(min);
+      for (i = o = 1, ref = num - 1; 1 <= ref ? o <= ref : o >= ref; i = 1 <= ref ? ++o : --o) {
+        limits.push(min + (i / num) * (max - min));
+      }
+      limits.push(max);
+    } else if (mode.substr(0, 1) === 'l') {
+      if (min <= 0) {
+        throw 'Logarithmic scales are only possible for values > 0';
+      }
+      min_log = Math.LOG10E * log(min);
+      max_log = Math.LOG10E * log(max);
+      limits.push(min);
+      for (i = w = 1, ref1 = num - 1; 1 <= ref1 ? w <= ref1 : w >= ref1; i = 1 <= ref1 ? ++w : --w) {
+        limits.push(pow(10, min_log + (i / num) * (max_log - min_log)));
+      }
+      limits.push(max);
+    } else if (mode.substr(0, 1) === 'q') {
+      limits.push(min);
+      for (i = aa = 1, ref2 = num - 1; 1 <= ref2 ? aa <= ref2 : aa >= ref2; i = 1 <= ref2 ? ++aa : --aa) {
+        p = values.length * i / num;
+        pb = floor(p);
+        if (pb === p) {
+          limits.push(values[pb]);
+        } else {
+          pr = p - pb;
+          limits.push(values[pb] * pr + values[pb + 1] * (1 - pr));
+        }
+      }
+      limits.push(max);
+    } else if (mode.substr(0, 1) === 'k') {
+
+      /*
+      implementation based on
+      http://code.google.com/p/figue/source/browse/trunk/figue.js#336
+      simplified for 1-d input values
+       */
+      n = values.length;
+      assignments = new Array(n);
+      clusterSizes = new Array(num);
+      repeat = true;
+      nb_iters = 0;
+      centroids = null;
+      centroids = [];
+      centroids.push(min);
+      for (i = ab = 1, ref3 = num - 1; 1 <= ref3 ? ab <= ref3 : ab >= ref3; i = 1 <= ref3 ? ++ab : --ab) {
+        centroids.push(min + (i / num) * (max - min));
+      }
+      centroids.push(max);
+      while (repeat) {
+        for (j = ac = 0, ref4 = num - 1; 0 <= ref4 ? ac <= ref4 : ac >= ref4; j = 0 <= ref4 ? ++ac : --ac) {
+          clusterSizes[j] = 0;
+        }
+        for (i = ad = 0, ref5 = n - 1; 0 <= ref5 ? ad <= ref5 : ad >= ref5; i = 0 <= ref5 ? ++ad : --ad) {
+          value = values[i];
+          mindist = Number.MAX_VALUE;
+          for (j = ae = 0, ref6 = num - 1; 0 <= ref6 ? ae <= ref6 : ae >= ref6; j = 0 <= ref6 ? ++ae : --ae) {
+            dist = abs(centroids[j] - value);
+            if (dist < mindist) {
+              mindist = dist;
+              best = j;
+            }
+          }
+          clusterSizes[best]++;
+          assignments[i] = best;
+        }
+        newCentroids = new Array(num);
+        for (j = af = 0, ref7 = num - 1; 0 <= ref7 ? af <= ref7 : af >= ref7; j = 0 <= ref7 ? ++af : --af) {
+          newCentroids[j] = null;
+        }
+        for (i = ag = 0, ref8 = n - 1; 0 <= ref8 ? ag <= ref8 : ag >= ref8; i = 0 <= ref8 ? ++ag : --ag) {
+          cluster = assignments[i];
+          if (newCentroids[cluster] === null) {
+            newCentroids[cluster] = values[i];
+          } else {
+            newCentroids[cluster] += values[i];
+          }
+        }
+        for (j = ah = 0, ref9 = num - 1; 0 <= ref9 ? ah <= ref9 : ah >= ref9; j = 0 <= ref9 ? ++ah : --ah) {
+          newCentroids[j] *= 1 / clusterSizes[j];
+        }
+        repeat = false;
+        for (j = ai = 0, ref10 = num - 1; 0 <= ref10 ? ai <= ref10 : ai >= ref10; j = 0 <= ref10 ? ++ai : --ai) {
+          if (newCentroids[j] !== centroids[i]) {
+            repeat = true;
+            break;
+          }
+        }
+        centroids = newCentroids;
+        nb_iters++;
+        if (nb_iters > 200) {
+          repeat = false;
+        }
+      }
+      kClusters = {};
+      for (j = aj = 0, ref11 = num - 1; 0 <= ref11 ? aj <= ref11 : aj >= ref11; j = 0 <= ref11 ? ++aj : --aj) {
+        kClusters[j] = [];
+      }
+      for (i = ak = 0, ref12 = n - 1; 0 <= ref12 ? ak <= ref12 : ak >= ref12; i = 0 <= ref12 ? ++ak : --ak) {
+        cluster = assignments[i];
+        kClusters[cluster].push(values[i]);
+      }
+      tmpKMeansBreaks = [];
+      for (j = al = 0, ref13 = num - 1; 0 <= ref13 ? al <= ref13 : al >= ref13; j = 0 <= ref13 ? ++al : --al) {
+        tmpKMeansBreaks.push(kClusters[j][0]);
+        tmpKMeansBreaks.push(kClusters[j][kClusters[j].length - 1]);
+      }
+      tmpKMeansBreaks = tmpKMeansBreaks.sort(function(a, b) {
+        return a - b;
+      });
+      limits.push(tmpKMeansBreaks[0]);
+      for (i = am = 1, ref14 = tmpKMeansBreaks.length - 1; am <= ref14; i = am += 2) {
+        if (!isNaN(tmpKMeansBreaks[i])) {
+          limits.push(tmpKMeansBreaks[i]);
+        }
+      }
+    }
+    return limits;
+  };
+
+  hsi2rgb = function(h, s, i) {
+
+    /*
+    borrowed from here:
+    http://hummer.stanford.edu/museinfo/doc/examples/humdrum/keyscape2/hsi2rgb.cpp
+     */
+    var args, b, g, r;
+    args = unpack(arguments);
+    h = args[0], s = args[1], i = args[2];
+    h /= 360;
+    if (h < 1 / 3) {
+      b = (1 - s) / 3;
+      r = (1 + s * cos(TWOPI * h) / cos(PITHIRD - TWOPI * h)) / 3;
+      g = 1 - (b + r);
+    } else if (h < 2 / 3) {
+      h -= 1 / 3;
+      r = (1 - s) / 3;
+      g = (1 + s * cos(TWOPI * h) / cos(PITHIRD - TWOPI * h)) / 3;
+      b = 1 - (r + g);
+    } else {
+      h -= 2 / 3;
+      g = (1 - s) / 3;
+      b = (1 + s * cos(TWOPI * h) / cos(PITHIRD - TWOPI * h)) / 3;
+      r = 1 - (g + b);
+    }
+    r = limit(i * r * 3);
+    g = limit(i * g * 3);
+    b = limit(i * b * 3);
+    return [r * 255, g * 255, b * 255, args.length > 3 ? args[3] : 1];
+  };
+
+  rgb2hsi = function() {
+
+    /*
+    borrowed from here:
+    http://hummer.stanford.edu/museinfo/doc/examples/humdrum/keyscape2/rgb2hsi.cpp
+     */
+    var b, g, h, i, min, r, ref, s;
+    ref = unpack(arguments), r = ref[0], g = ref[1], b = ref[2];
+    TWOPI = Math.PI * 2;
+    r /= 255;
+    g /= 255;
+    b /= 255;
+    min = Math.min(r, g, b);
+    i = (r + g + b) / 3;
+    s = 1 - min / i;
+    if (s === 0) {
+      h = 0;
+    } else {
+      h = ((r - g) + (r - b)) / 2;
+      h /= Math.sqrt((r - g) * (r - g) + (r - b) * (g - b));
+      h = Math.acos(h);
+      if (b > g) {
+        h = TWOPI - h;
+      }
+      h /= TWOPI;
+    }
+    return [h * 360, s, i];
+  };
+
+  chroma.hsi = function() {
+    return (function(func, args, ctor) {
+      ctor.prototype = func.prototype;
+      var child = new ctor, result = func.apply(child, args);
+      return Object(result) === result ? result : child;
+    })(Color, slice.call(arguments).concat(['hsi']), function(){});
+  };
+
+  _input.hsi = hsi2rgb;
+
+  Color.prototype.hsi = function() {
+    return rgb2hsi(this._rgb);
+  };
+
+  interpolate_hsx = function(col1, col2, f, m) {
+    var dh, hue, hue0, hue1, lbv, lbv0, lbv1, res, sat, sat0, sat1, xyz0, xyz1;
+    if (m === 'hsl') {
+      xyz0 = col1.hsl();
+      xyz1 = col2.hsl();
+    } else if (m === 'hsv') {
+      xyz0 = col1.hsv();
+      xyz1 = col2.hsv();
+    } else if (m === 'hsi') {
+      xyz0 = col1.hsi();
+      xyz1 = col2.hsi();
+    } else if (m === 'lch' || m === 'hcl') {
+      m = 'hcl';
+      xyz0 = col1.hcl();
+      xyz1 = col2.hcl();
+    }
+    if (m.substr(0, 1) === 'h') {
+      hue0 = xyz0[0], sat0 = xyz0[1], lbv0 = xyz0[2];
+      hue1 = xyz1[0], sat1 = xyz1[1], lbv1 = xyz1[2];
+    }
+    if (!isNaN(hue0) && !isNaN(hue1)) {
+      if (hue1 > hue0 && hue1 - hue0 > 180) {
+        dh = hue1 - (hue0 + 360);
+      } else if (hue1 < hue0 && hue0 - hue1 > 180) {
+        dh = hue1 + 360 - hue0;
+      } else {
+        dh = hue1 - hue0;
+      }
+      hue = hue0 + f * dh;
+    } else if (!isNaN(hue0)) {
+      hue = hue0;
+      if ((lbv1 === 1 || lbv1 === 0) && m !== 'hsv') {
+        sat = sat0;
+      }
+    } else if (!isNaN(hue1)) {
+      hue = hue1;
+      if ((lbv0 === 1 || lbv0 === 0) && m !== 'hsv') {
+        sat = sat1;
+      }
+    } else {
+      hue = Number.NaN;
+    }
+    if (sat == null) {
+      sat = sat0 + f * (sat1 - sat0);
+    }
+    lbv = lbv0 + f * (lbv1 - lbv0);
+    return res = chroma[m](hue, sat, lbv);
+  };
+
+  _interpolators = _interpolators.concat((function() {
+    var len, o, ref, results;
+    ref = ['hsv', 'hsl', 'hsi', 'hcl', 'lch'];
+    results = [];
+    for (o = 0, len = ref.length; o < len; o++) {
+      m = ref[o];
+      results.push([m, interpolate_hsx]);
+    }
+    return results;
+  })());
+
+  interpolate_num = function(col1, col2, f, m) {
+    var n1, n2;
+    n1 = col1.num();
+    n2 = col2.num();
+    return chroma.num(n1 + (n2 - n1) * f, 'num');
+  };
+
+  _interpolators.push(['num', interpolate_num]);
+
+  interpolate_lab = function(col1, col2, f, m) {
+    var res, xyz0, xyz1;
+    xyz0 = col1.lab();
+    xyz1 = col2.lab();
+    return res = new Color(xyz0[0] + f * (xyz1[0] - xyz0[0]), xyz0[1] + f * (xyz1[1] - xyz0[1]), xyz0[2] + f * (xyz1[2] - xyz0[2]), m);
+  };
+
+  _interpolators.push(['lab', interpolate_lab]);
+
+}).call(this);
+
+},{}],7:[function(require,module,exports){
 /*! @license Firebase v2.3.2
     License: https://www.firebase.com/terms/terms-of-service.html */
 (function() {var g,aa=this;function n(a){return void 0!==a}function ba(){}function ca(a){a.ub=function(){return a.uf?a.uf:a.uf=new a}}
@@ -553,12 +3075,12 @@ U.prototype.Ve=function(a,b){x("Firebase.resetPassword",2,2,arguments.length);ng
 
 module.exports = Firebase;
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 'use strict';
 
 module.exports = require('react/lib/ReactDOM');
 
-},{"react/lib/ReactDOM":42}],8:[function(require,module,exports){
+},{"react/lib/ReactDOM":43}],9:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -595,7 +3117,7 @@ var AutoFocusUtils = {
 };
 
 module.exports = AutoFocusUtils;
-},{"./ReactMount":72,"./findDOMNode":115,"fbjs/lib/focusNode":145}],9:[function(require,module,exports){
+},{"./ReactMount":73,"./findDOMNode":116,"fbjs/lib/focusNode":146}],10:[function(require,module,exports){
 /**
  * Copyright 2013-2015 Facebook, Inc.
  * All rights reserved.
@@ -1001,7 +3523,7 @@ var BeforeInputEventPlugin = {
 };
 
 module.exports = BeforeInputEventPlugin;
-},{"./EventConstants":21,"./EventPropagators":25,"./FallbackCompositionState":26,"./SyntheticCompositionEvent":97,"./SyntheticInputEvent":101,"fbjs/lib/ExecutionEnvironment":137,"fbjs/lib/keyOf":155}],10:[function(require,module,exports){
+},{"./EventConstants":22,"./EventPropagators":26,"./FallbackCompositionState":27,"./SyntheticCompositionEvent":98,"./SyntheticInputEvent":102,"fbjs/lib/ExecutionEnvironment":138,"fbjs/lib/keyOf":156}],11:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -1141,7 +3663,7 @@ var CSSProperty = {
 };
 
 module.exports = CSSProperty;
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -1319,7 +3841,7 @@ ReactPerf.measureMethods(CSSPropertyOperations, 'CSSPropertyOperations', {
 
 module.exports = CSSPropertyOperations;
 }).call(this,require('_process'))
-},{"./CSSProperty":10,"./ReactPerf":78,"./dangerousStyleValue":112,"_process":5,"fbjs/lib/ExecutionEnvironment":137,"fbjs/lib/camelizeStyleName":139,"fbjs/lib/hyphenateStyleName":150,"fbjs/lib/memoizeStringOnly":157,"fbjs/lib/warning":162}],12:[function(require,module,exports){
+},{"./CSSProperty":11,"./ReactPerf":79,"./dangerousStyleValue":113,"_process":5,"fbjs/lib/ExecutionEnvironment":138,"fbjs/lib/camelizeStyleName":140,"fbjs/lib/hyphenateStyleName":151,"fbjs/lib/memoizeStringOnly":158,"fbjs/lib/warning":163}],13:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -1415,7 +3937,7 @@ PooledClass.addPoolingTo(CallbackQueue);
 
 module.exports = CallbackQueue;
 }).call(this,require('_process'))
-},{"./Object.assign":29,"./PooledClass":30,"_process":5,"fbjs/lib/invariant":151}],13:[function(require,module,exports){
+},{"./Object.assign":30,"./PooledClass":31,"_process":5,"fbjs/lib/invariant":152}],14:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -1737,7 +4259,7 @@ var ChangeEventPlugin = {
 };
 
 module.exports = ChangeEventPlugin;
-},{"./EventConstants":21,"./EventPluginHub":22,"./EventPropagators":25,"./ReactUpdates":90,"./SyntheticEvent":99,"./getEventTarget":121,"./isEventSupported":126,"./isTextInputElement":127,"fbjs/lib/ExecutionEnvironment":137,"fbjs/lib/keyOf":155}],14:[function(require,module,exports){
+},{"./EventConstants":22,"./EventPluginHub":23,"./EventPropagators":26,"./ReactUpdates":91,"./SyntheticEvent":100,"./getEventTarget":122,"./isEventSupported":127,"./isTextInputElement":128,"fbjs/lib/ExecutionEnvironment":138,"fbjs/lib/keyOf":156}],15:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -1761,7 +4283,7 @@ var ClientReactRootIndex = {
 };
 
 module.exports = ClientReactRootIndex;
-},{}],15:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -1893,7 +4415,7 @@ ReactPerf.measureMethods(DOMChildrenOperations, 'DOMChildrenOperations', {
 
 module.exports = DOMChildrenOperations;
 }).call(this,require('_process'))
-},{"./Danger":18,"./ReactMultiChildUpdateTypes":74,"./ReactPerf":78,"./setInnerHTML":131,"./setTextContent":132,"_process":5,"fbjs/lib/invariant":151}],16:[function(require,module,exports){
+},{"./Danger":19,"./ReactMultiChildUpdateTypes":75,"./ReactPerf":79,"./setInnerHTML":132,"./setTextContent":133,"_process":5,"fbjs/lib/invariant":152}],17:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -2130,7 +4652,7 @@ var DOMProperty = {
 
 module.exports = DOMProperty;
 }).call(this,require('_process'))
-},{"_process":5,"fbjs/lib/invariant":151}],17:[function(require,module,exports){
+},{"_process":5,"fbjs/lib/invariant":152}],18:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -2358,7 +4880,7 @@ ReactPerf.measureMethods(DOMPropertyOperations, 'DOMPropertyOperations', {
 
 module.exports = DOMPropertyOperations;
 }).call(this,require('_process'))
-},{"./DOMProperty":16,"./ReactPerf":78,"./quoteAttributeValueForBrowser":129,"_process":5,"fbjs/lib/warning":162}],18:[function(require,module,exports){
+},{"./DOMProperty":17,"./ReactPerf":79,"./quoteAttributeValueForBrowser":130,"_process":5,"fbjs/lib/warning":163}],19:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -2506,7 +5028,7 @@ var Danger = {
 
 module.exports = Danger;
 }).call(this,require('_process'))
-},{"_process":5,"fbjs/lib/ExecutionEnvironment":137,"fbjs/lib/createNodesFromMarkup":142,"fbjs/lib/emptyFunction":143,"fbjs/lib/getMarkupWrap":147,"fbjs/lib/invariant":151}],19:[function(require,module,exports){
+},{"_process":5,"fbjs/lib/ExecutionEnvironment":138,"fbjs/lib/createNodesFromMarkup":143,"fbjs/lib/emptyFunction":144,"fbjs/lib/getMarkupWrap":148,"fbjs/lib/invariant":152}],20:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -2534,7 +5056,7 @@ var keyOf = require('fbjs/lib/keyOf');
 var DefaultEventPluginOrder = [keyOf({ ResponderEventPlugin: null }), keyOf({ SimpleEventPlugin: null }), keyOf({ TapEventPlugin: null }), keyOf({ EnterLeaveEventPlugin: null }), keyOf({ ChangeEventPlugin: null }), keyOf({ SelectEventPlugin: null }), keyOf({ BeforeInputEventPlugin: null })];
 
 module.exports = DefaultEventPluginOrder;
-},{"fbjs/lib/keyOf":155}],20:[function(require,module,exports){
+},{"fbjs/lib/keyOf":156}],21:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -2659,7 +5181,7 @@ var EnterLeaveEventPlugin = {
 };
 
 module.exports = EnterLeaveEventPlugin;
-},{"./EventConstants":21,"./EventPropagators":25,"./ReactMount":72,"./SyntheticMouseEvent":103,"fbjs/lib/keyOf":155}],21:[function(require,module,exports){
+},{"./EventConstants":22,"./EventPropagators":26,"./ReactMount":73,"./SyntheticMouseEvent":104,"fbjs/lib/keyOf":156}],22:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -2752,7 +5274,7 @@ var EventConstants = {
 };
 
 module.exports = EventConstants;
-},{"fbjs/lib/keyMirror":154}],22:[function(require,module,exports){
+},{"fbjs/lib/keyMirror":155}],23:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -3034,7 +5556,7 @@ var EventPluginHub = {
 
 module.exports = EventPluginHub;
 }).call(this,require('_process'))
-},{"./EventPluginRegistry":23,"./EventPluginUtils":24,"./ReactErrorUtils":63,"./accumulateInto":109,"./forEachAccumulated":117,"_process":5,"fbjs/lib/invariant":151,"fbjs/lib/warning":162}],23:[function(require,module,exports){
+},{"./EventPluginRegistry":24,"./EventPluginUtils":25,"./ReactErrorUtils":64,"./accumulateInto":110,"./forEachAccumulated":118,"_process":5,"fbjs/lib/invariant":152,"fbjs/lib/warning":163}],24:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -3257,7 +5779,7 @@ var EventPluginRegistry = {
 
 module.exports = EventPluginRegistry;
 }).call(this,require('_process'))
-},{"_process":5,"fbjs/lib/invariant":151}],24:[function(require,module,exports){
+},{"_process":5,"fbjs/lib/invariant":152}],25:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -3462,7 +5984,7 @@ var EventPluginUtils = {
 
 module.exports = EventPluginUtils;
 }).call(this,require('_process'))
-},{"./EventConstants":21,"./ReactErrorUtils":63,"_process":5,"fbjs/lib/invariant":151,"fbjs/lib/warning":162}],25:[function(require,module,exports){
+},{"./EventConstants":22,"./ReactErrorUtils":64,"_process":5,"fbjs/lib/invariant":152,"fbjs/lib/warning":163}],26:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -3600,7 +6122,7 @@ var EventPropagators = {
 
 module.exports = EventPropagators;
 }).call(this,require('_process'))
-},{"./EventConstants":21,"./EventPluginHub":22,"./accumulateInto":109,"./forEachAccumulated":117,"_process":5,"fbjs/lib/warning":162}],26:[function(require,module,exports){
+},{"./EventConstants":22,"./EventPluginHub":23,"./accumulateInto":110,"./forEachAccumulated":118,"_process":5,"fbjs/lib/warning":163}],27:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -3696,7 +6218,7 @@ assign(FallbackCompositionState.prototype, {
 PooledClass.addPoolingTo(FallbackCompositionState);
 
 module.exports = FallbackCompositionState;
-},{"./Object.assign":29,"./PooledClass":30,"./getTextContentAccessor":124}],27:[function(require,module,exports){
+},{"./Object.assign":30,"./PooledClass":31,"./getTextContentAccessor":125}],28:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -3927,7 +6449,7 @@ var HTMLDOMPropertyConfig = {
 };
 
 module.exports = HTMLDOMPropertyConfig;
-},{"./DOMProperty":16,"fbjs/lib/ExecutionEnvironment":137}],28:[function(require,module,exports){
+},{"./DOMProperty":17,"fbjs/lib/ExecutionEnvironment":138}],29:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -4064,7 +6586,7 @@ var LinkedValueUtils = {
 
 module.exports = LinkedValueUtils;
 }).call(this,require('_process'))
-},{"./ReactPropTypeLocations":80,"./ReactPropTypes":81,"_process":5,"fbjs/lib/invariant":151,"fbjs/lib/warning":162}],29:[function(require,module,exports){
+},{"./ReactPropTypeLocations":81,"./ReactPropTypes":82,"_process":5,"fbjs/lib/invariant":152,"fbjs/lib/warning":163}],30:[function(require,module,exports){
 /**
  * Copyright 2014-2015, Facebook, Inc.
  * All rights reserved.
@@ -4112,7 +6634,7 @@ function assign(target, sources) {
 }
 
 module.exports = assign;
-},{}],30:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -4234,7 +6756,7 @@ var PooledClass = {
 
 module.exports = PooledClass;
 }).call(this,require('_process'))
-},{"_process":5,"fbjs/lib/invariant":151}],31:[function(require,module,exports){
+},{"_process":5,"fbjs/lib/invariant":152}],32:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -4275,7 +6797,7 @@ React.__SECRET_DOM_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = ReactDOM;
 React.__SECRET_DOM_SERVER_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = ReactDOMServer;
 
 module.exports = React;
-},{"./Object.assign":29,"./ReactDOM":42,"./ReactDOMServer":52,"./ReactIsomorphic":70,"./deprecated":113}],32:[function(require,module,exports){
+},{"./Object.assign":30,"./ReactDOM":43,"./ReactDOMServer":53,"./ReactIsomorphic":71,"./deprecated":114}],33:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -4314,7 +6836,7 @@ var ReactBrowserComponentMixin = {
 
 module.exports = ReactBrowserComponentMixin;
 }).call(this,require('_process'))
-},{"./ReactInstanceMap":69,"./findDOMNode":115,"_process":5,"fbjs/lib/warning":162}],33:[function(require,module,exports){
+},{"./ReactInstanceMap":70,"./findDOMNode":116,"_process":5,"fbjs/lib/warning":163}],34:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -4639,7 +7161,7 @@ ReactPerf.measureMethods(ReactBrowserEventEmitter, 'ReactBrowserEventEmitter', {
 });
 
 module.exports = ReactBrowserEventEmitter;
-},{"./EventConstants":21,"./EventPluginHub":22,"./EventPluginRegistry":23,"./Object.assign":29,"./ReactEventEmitterMixin":64,"./ReactPerf":78,"./ViewportMetrics":108,"./isEventSupported":126}],34:[function(require,module,exports){
+},{"./EventConstants":22,"./EventPluginHub":23,"./EventPluginRegistry":24,"./Object.assign":30,"./ReactEventEmitterMixin":65,"./ReactPerf":79,"./ViewportMetrics":109,"./isEventSupported":127}],35:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014-2015, Facebook, Inc.
@@ -4764,7 +7286,7 @@ var ReactChildReconciler = {
 
 module.exports = ReactChildReconciler;
 }).call(this,require('_process'))
-},{"./ReactReconciler":83,"./instantiateReactComponent":125,"./shouldUpdateReactComponent":133,"./traverseAllChildren":134,"_process":5,"fbjs/lib/warning":162}],35:[function(require,module,exports){
+},{"./ReactReconciler":84,"./instantiateReactComponent":126,"./shouldUpdateReactComponent":134,"./traverseAllChildren":135,"_process":5,"fbjs/lib/warning":163}],36:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -4947,7 +7469,7 @@ var ReactChildren = {
 };
 
 module.exports = ReactChildren;
-},{"./PooledClass":30,"./ReactElement":59,"./traverseAllChildren":134,"fbjs/lib/emptyFunction":143}],36:[function(require,module,exports){
+},{"./PooledClass":31,"./ReactElement":60,"./traverseAllChildren":135,"fbjs/lib/emptyFunction":144}],37:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -5721,7 +8243,7 @@ var ReactClass = {
 
 module.exports = ReactClass;
 }).call(this,require('_process'))
-},{"./Object.assign":29,"./ReactComponent":37,"./ReactElement":59,"./ReactNoopUpdateQueue":76,"./ReactPropTypeLocationNames":79,"./ReactPropTypeLocations":80,"_process":5,"fbjs/lib/emptyObject":144,"fbjs/lib/invariant":151,"fbjs/lib/keyMirror":154,"fbjs/lib/keyOf":155,"fbjs/lib/warning":162}],37:[function(require,module,exports){
+},{"./Object.assign":30,"./ReactComponent":38,"./ReactElement":60,"./ReactNoopUpdateQueue":77,"./ReactPropTypeLocationNames":80,"./ReactPropTypeLocations":81,"_process":5,"fbjs/lib/emptyObject":145,"fbjs/lib/invariant":152,"fbjs/lib/keyMirror":155,"fbjs/lib/keyOf":156,"fbjs/lib/warning":163}],38:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -5846,7 +8368,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 module.exports = ReactComponent;
 }).call(this,require('_process'))
-},{"./ReactNoopUpdateQueue":76,"./canDefineProperty":111,"_process":5,"fbjs/lib/emptyObject":144,"fbjs/lib/invariant":151,"fbjs/lib/warning":162}],38:[function(require,module,exports){
+},{"./ReactNoopUpdateQueue":77,"./canDefineProperty":112,"_process":5,"fbjs/lib/emptyObject":145,"fbjs/lib/invariant":152,"fbjs/lib/warning":163}],39:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -5888,7 +8410,7 @@ var ReactComponentBrowserEnvironment = {
 };
 
 module.exports = ReactComponentBrowserEnvironment;
-},{"./ReactDOMIDOperations":47,"./ReactMount":72}],39:[function(require,module,exports){
+},{"./ReactDOMIDOperations":48,"./ReactMount":73}],40:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014-2015, Facebook, Inc.
@@ -5942,7 +8464,7 @@ var ReactComponentEnvironment = {
 
 module.exports = ReactComponentEnvironment;
 }).call(this,require('_process'))
-},{"_process":5,"fbjs/lib/invariant":151}],40:[function(require,module,exports){
+},{"_process":5,"fbjs/lib/invariant":152}],41:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -6639,7 +9161,7 @@ var ReactCompositeComponent = {
 
 module.exports = ReactCompositeComponent;
 }).call(this,require('_process'))
-},{"./Object.assign":29,"./ReactComponentEnvironment":39,"./ReactCurrentOwner":41,"./ReactElement":59,"./ReactInstanceMap":69,"./ReactPerf":78,"./ReactPropTypeLocationNames":79,"./ReactPropTypeLocations":80,"./ReactReconciler":83,"./ReactUpdateQueue":89,"./shouldUpdateReactComponent":133,"_process":5,"fbjs/lib/emptyObject":144,"fbjs/lib/invariant":151,"fbjs/lib/warning":162}],41:[function(require,module,exports){
+},{"./Object.assign":30,"./ReactComponentEnvironment":40,"./ReactCurrentOwner":42,"./ReactElement":60,"./ReactInstanceMap":70,"./ReactPerf":79,"./ReactPropTypeLocationNames":80,"./ReactPropTypeLocations":81,"./ReactReconciler":84,"./ReactUpdateQueue":90,"./shouldUpdateReactComponent":134,"_process":5,"fbjs/lib/emptyObject":145,"fbjs/lib/invariant":152,"fbjs/lib/warning":163}],42:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -6670,7 +9192,7 @@ var ReactCurrentOwner = {
 };
 
 module.exports = ReactCurrentOwner;
-},{}],42:[function(require,module,exports){
+},{}],43:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -6765,7 +9287,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 module.exports = React;
 }).call(this,require('_process'))
-},{"./ReactCurrentOwner":41,"./ReactDOMTextComponent":53,"./ReactDefaultInjection":56,"./ReactInstanceHandles":68,"./ReactMount":72,"./ReactPerf":78,"./ReactReconciler":83,"./ReactUpdates":90,"./ReactVersion":91,"./findDOMNode":115,"./renderSubtreeIntoContainer":130,"_process":5,"fbjs/lib/ExecutionEnvironment":137,"fbjs/lib/warning":162}],43:[function(require,module,exports){
+},{"./ReactCurrentOwner":42,"./ReactDOMTextComponent":54,"./ReactDefaultInjection":57,"./ReactInstanceHandles":69,"./ReactMount":73,"./ReactPerf":79,"./ReactReconciler":84,"./ReactUpdates":91,"./ReactVersion":92,"./findDOMNode":116,"./renderSubtreeIntoContainer":131,"_process":5,"fbjs/lib/ExecutionEnvironment":138,"fbjs/lib/warning":163}],44:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -6816,7 +9338,7 @@ var ReactDOMButton = {
 };
 
 module.exports = ReactDOMButton;
-},{}],44:[function(require,module,exports){
+},{}],45:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -7781,7 +10303,7 @@ assign(ReactDOMComponent.prototype, ReactDOMComponent.Mixin, ReactMultiChild.Mix
 
 module.exports = ReactDOMComponent;
 }).call(this,require('_process'))
-},{"./AutoFocusUtils":8,"./CSSPropertyOperations":11,"./DOMProperty":16,"./DOMPropertyOperations":17,"./EventConstants":21,"./Object.assign":29,"./ReactBrowserEventEmitter":33,"./ReactComponentBrowserEnvironment":38,"./ReactDOMButton":43,"./ReactDOMInput":48,"./ReactDOMOption":49,"./ReactDOMSelect":50,"./ReactDOMTextarea":54,"./ReactMount":72,"./ReactMultiChild":73,"./ReactPerf":78,"./ReactUpdateQueue":89,"./canDefineProperty":111,"./escapeTextContentForBrowser":114,"./isEventSupported":126,"./setInnerHTML":131,"./setTextContent":132,"./validateDOMNesting":135,"_process":5,"fbjs/lib/invariant":151,"fbjs/lib/keyOf":155,"fbjs/lib/shallowEqual":160,"fbjs/lib/warning":162}],45:[function(require,module,exports){
+},{"./AutoFocusUtils":9,"./CSSPropertyOperations":12,"./DOMProperty":17,"./DOMPropertyOperations":18,"./EventConstants":22,"./Object.assign":30,"./ReactBrowserEventEmitter":34,"./ReactComponentBrowserEnvironment":39,"./ReactDOMButton":44,"./ReactDOMInput":49,"./ReactDOMOption":50,"./ReactDOMSelect":51,"./ReactDOMTextarea":55,"./ReactMount":73,"./ReactMultiChild":74,"./ReactPerf":79,"./ReactUpdateQueue":90,"./canDefineProperty":112,"./escapeTextContentForBrowser":115,"./isEventSupported":127,"./setInnerHTML":132,"./setTextContent":133,"./validateDOMNesting":136,"_process":5,"fbjs/lib/invariant":152,"fbjs/lib/keyOf":156,"fbjs/lib/shallowEqual":161,"fbjs/lib/warning":163}],46:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -7961,7 +10483,7 @@ var ReactDOMFactories = mapObject({
 
 module.exports = ReactDOMFactories;
 }).call(this,require('_process'))
-},{"./ReactElement":59,"./ReactElementValidator":60,"_process":5,"fbjs/lib/mapObject":156}],46:[function(require,module,exports){
+},{"./ReactElement":60,"./ReactElementValidator":61,"_process":5,"fbjs/lib/mapObject":157}],47:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -7980,7 +10502,7 @@ var ReactDOMFeatureFlags = {
 };
 
 module.exports = ReactDOMFeatureFlags;
-},{}],47:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -8077,7 +10599,7 @@ ReactPerf.measureMethods(ReactDOMIDOperations, 'ReactDOMIDOperations', {
 
 module.exports = ReactDOMIDOperations;
 }).call(this,require('_process'))
-},{"./DOMChildrenOperations":15,"./DOMPropertyOperations":17,"./ReactMount":72,"./ReactPerf":78,"_process":5,"fbjs/lib/invariant":151}],48:[function(require,module,exports){
+},{"./DOMChildrenOperations":16,"./DOMPropertyOperations":18,"./ReactMount":73,"./ReactPerf":79,"_process":5,"fbjs/lib/invariant":152}],49:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -8233,7 +10755,7 @@ function _handleChange(event) {
 
 module.exports = ReactDOMInput;
 }).call(this,require('_process'))
-},{"./LinkedValueUtils":28,"./Object.assign":29,"./ReactDOMIDOperations":47,"./ReactMount":72,"./ReactUpdates":90,"_process":5,"fbjs/lib/invariant":151}],49:[function(require,module,exports){
+},{"./LinkedValueUtils":29,"./Object.assign":30,"./ReactDOMIDOperations":48,"./ReactMount":73,"./ReactUpdates":91,"_process":5,"fbjs/lib/invariant":152}],50:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -8322,7 +10844,7 @@ var ReactDOMOption = {
 
 module.exports = ReactDOMOption;
 }).call(this,require('_process'))
-},{"./Object.assign":29,"./ReactChildren":35,"./ReactDOMSelect":50,"_process":5,"fbjs/lib/warning":162}],50:[function(require,module,exports){
+},{"./Object.assign":30,"./ReactChildren":36,"./ReactDOMSelect":51,"_process":5,"fbjs/lib/warning":163}],51:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -8513,7 +11035,7 @@ function _handleChange(event) {
 
 module.exports = ReactDOMSelect;
 }).call(this,require('_process'))
-},{"./LinkedValueUtils":28,"./Object.assign":29,"./ReactMount":72,"./ReactUpdates":90,"_process":5,"fbjs/lib/warning":162}],51:[function(require,module,exports){
+},{"./LinkedValueUtils":29,"./Object.assign":30,"./ReactMount":73,"./ReactUpdates":91,"_process":5,"fbjs/lib/warning":163}],52:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -8726,7 +11248,7 @@ var ReactDOMSelection = {
 };
 
 module.exports = ReactDOMSelection;
-},{"./getNodeForCharacterOffset":123,"./getTextContentAccessor":124,"fbjs/lib/ExecutionEnvironment":137}],52:[function(require,module,exports){
+},{"./getNodeForCharacterOffset":124,"./getTextContentAccessor":125,"fbjs/lib/ExecutionEnvironment":138}],53:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -8753,7 +11275,7 @@ var ReactDOMServer = {
 };
 
 module.exports = ReactDOMServer;
-},{"./ReactDefaultInjection":56,"./ReactServerRendering":87,"./ReactVersion":91}],53:[function(require,module,exports){
+},{"./ReactDefaultInjection":57,"./ReactServerRendering":88,"./ReactVersion":92}],54:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -8883,7 +11405,7 @@ assign(ReactDOMTextComponent.prototype, {
 
 module.exports = ReactDOMTextComponent;
 }).call(this,require('_process'))
-},{"./DOMChildrenOperations":15,"./DOMPropertyOperations":17,"./Object.assign":29,"./ReactComponentBrowserEnvironment":38,"./ReactMount":72,"./escapeTextContentForBrowser":114,"./setTextContent":132,"./validateDOMNesting":135,"_process":5}],54:[function(require,module,exports){
+},{"./DOMChildrenOperations":16,"./DOMPropertyOperations":18,"./Object.assign":30,"./ReactComponentBrowserEnvironment":39,"./ReactMount":73,"./escapeTextContentForBrowser":115,"./setTextContent":133,"./validateDOMNesting":136,"_process":5}],55:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -8999,7 +11521,7 @@ function _handleChange(event) {
 
 module.exports = ReactDOMTextarea;
 }).call(this,require('_process'))
-},{"./LinkedValueUtils":28,"./Object.assign":29,"./ReactDOMIDOperations":47,"./ReactUpdates":90,"_process":5,"fbjs/lib/invariant":151,"fbjs/lib/warning":162}],55:[function(require,module,exports){
+},{"./LinkedValueUtils":29,"./Object.assign":30,"./ReactDOMIDOperations":48,"./ReactUpdates":91,"_process":5,"fbjs/lib/invariant":152,"fbjs/lib/warning":163}],56:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -9067,7 +11589,7 @@ var ReactDefaultBatchingStrategy = {
 };
 
 module.exports = ReactDefaultBatchingStrategy;
-},{"./Object.assign":29,"./ReactUpdates":90,"./Transaction":107,"fbjs/lib/emptyFunction":143}],56:[function(require,module,exports){
+},{"./Object.assign":30,"./ReactUpdates":91,"./Transaction":108,"fbjs/lib/emptyFunction":144}],57:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -9167,7 +11689,7 @@ module.exports = {
   inject: inject
 };
 }).call(this,require('_process'))
-},{"./BeforeInputEventPlugin":9,"./ChangeEventPlugin":13,"./ClientReactRootIndex":14,"./DefaultEventPluginOrder":19,"./EnterLeaveEventPlugin":20,"./HTMLDOMPropertyConfig":27,"./ReactBrowserComponentMixin":32,"./ReactComponentBrowserEnvironment":38,"./ReactDOMComponent":44,"./ReactDOMTextComponent":53,"./ReactDefaultBatchingStrategy":55,"./ReactDefaultPerf":57,"./ReactEventListener":65,"./ReactInjection":66,"./ReactInstanceHandles":68,"./ReactMount":72,"./ReactReconcileTransaction":82,"./SVGDOMPropertyConfig":92,"./SelectEventPlugin":93,"./ServerReactRootIndex":94,"./SimpleEventPlugin":95,"_process":5,"fbjs/lib/ExecutionEnvironment":137}],57:[function(require,module,exports){
+},{"./BeforeInputEventPlugin":10,"./ChangeEventPlugin":14,"./ClientReactRootIndex":15,"./DefaultEventPluginOrder":20,"./EnterLeaveEventPlugin":21,"./HTMLDOMPropertyConfig":28,"./ReactBrowserComponentMixin":33,"./ReactComponentBrowserEnvironment":39,"./ReactDOMComponent":45,"./ReactDOMTextComponent":54,"./ReactDefaultBatchingStrategy":56,"./ReactDefaultPerf":58,"./ReactEventListener":66,"./ReactInjection":67,"./ReactInstanceHandles":69,"./ReactMount":73,"./ReactReconcileTransaction":83,"./SVGDOMPropertyConfig":93,"./SelectEventPlugin":94,"./ServerReactRootIndex":95,"./SimpleEventPlugin":96,"_process":5,"fbjs/lib/ExecutionEnvironment":138}],58:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -9405,7 +11927,7 @@ var ReactDefaultPerf = {
 };
 
 module.exports = ReactDefaultPerf;
-},{"./DOMProperty":16,"./ReactDefaultPerfAnalysis":58,"./ReactMount":72,"./ReactPerf":78,"fbjs/lib/performanceNow":159}],58:[function(require,module,exports){
+},{"./DOMProperty":17,"./ReactDefaultPerfAnalysis":59,"./ReactMount":73,"./ReactPerf":79,"fbjs/lib/performanceNow":160}],59:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -9607,7 +12129,7 @@ var ReactDefaultPerfAnalysis = {
 };
 
 module.exports = ReactDefaultPerfAnalysis;
-},{"./Object.assign":29}],59:[function(require,module,exports){
+},{"./Object.assign":30}],60:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014-2015, Facebook, Inc.
@@ -9857,7 +12379,7 @@ ReactElement.isValidElement = function (object) {
 
 module.exports = ReactElement;
 }).call(this,require('_process'))
-},{"./Object.assign":29,"./ReactCurrentOwner":41,"./canDefineProperty":111,"_process":5}],60:[function(require,module,exports){
+},{"./Object.assign":30,"./ReactCurrentOwner":42,"./canDefineProperty":112,"_process":5}],61:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014-2015, Facebook, Inc.
@@ -10141,7 +12663,7 @@ var ReactElementValidator = {
 
 module.exports = ReactElementValidator;
 }).call(this,require('_process'))
-},{"./ReactCurrentOwner":41,"./ReactElement":59,"./ReactPropTypeLocationNames":79,"./ReactPropTypeLocations":80,"./canDefineProperty":111,"./getIteratorFn":122,"_process":5,"fbjs/lib/invariant":151,"fbjs/lib/warning":162}],61:[function(require,module,exports){
+},{"./ReactCurrentOwner":42,"./ReactElement":60,"./ReactPropTypeLocationNames":80,"./ReactPropTypeLocations":81,"./canDefineProperty":112,"./getIteratorFn":123,"_process":5,"fbjs/lib/invariant":152,"fbjs/lib/warning":163}],62:[function(require,module,exports){
 /**
  * Copyright 2014-2015, Facebook, Inc.
  * All rights reserved.
@@ -10193,7 +12715,7 @@ assign(ReactEmptyComponent.prototype, {
 ReactEmptyComponent.injection = ReactEmptyComponentInjection;
 
 module.exports = ReactEmptyComponent;
-},{"./Object.assign":29,"./ReactElement":59,"./ReactEmptyComponentRegistry":62,"./ReactReconciler":83}],62:[function(require,module,exports){
+},{"./Object.assign":30,"./ReactElement":60,"./ReactEmptyComponentRegistry":63,"./ReactReconciler":84}],63:[function(require,module,exports){
 /**
  * Copyright 2014-2015, Facebook, Inc.
  * All rights reserved.
@@ -10242,7 +12764,7 @@ var ReactEmptyComponentRegistry = {
 };
 
 module.exports = ReactEmptyComponentRegistry;
-},{}],63:[function(require,module,exports){
+},{}],64:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -10322,7 +12844,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 module.exports = ReactErrorUtils;
 }).call(this,require('_process'))
-},{"_process":5}],64:[function(require,module,exports){
+},{"_process":5}],65:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -10361,7 +12883,7 @@ var ReactEventEmitterMixin = {
 };
 
 module.exports = ReactEventEmitterMixin;
-},{"./EventPluginHub":22}],65:[function(require,module,exports){
+},{"./EventPluginHub":23}],66:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -10573,7 +13095,7 @@ var ReactEventListener = {
 };
 
 module.exports = ReactEventListener;
-},{"./Object.assign":29,"./PooledClass":30,"./ReactInstanceHandles":68,"./ReactMount":72,"./ReactUpdates":90,"./getEventTarget":121,"fbjs/lib/EventListener":136,"fbjs/lib/ExecutionEnvironment":137,"fbjs/lib/getUnboundedScrollPosition":148}],66:[function(require,module,exports){
+},{"./Object.assign":30,"./PooledClass":31,"./ReactInstanceHandles":69,"./ReactMount":73,"./ReactUpdates":91,"./getEventTarget":122,"fbjs/lib/EventListener":137,"fbjs/lib/ExecutionEnvironment":138,"fbjs/lib/getUnboundedScrollPosition":149}],67:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -10612,7 +13134,7 @@ var ReactInjection = {
 };
 
 module.exports = ReactInjection;
-},{"./DOMProperty":16,"./EventPluginHub":22,"./ReactBrowserEventEmitter":33,"./ReactClass":36,"./ReactComponentEnvironment":39,"./ReactEmptyComponent":61,"./ReactNativeComponent":75,"./ReactPerf":78,"./ReactRootIndex":85,"./ReactUpdates":90}],67:[function(require,module,exports){
+},{"./DOMProperty":17,"./EventPluginHub":23,"./ReactBrowserEventEmitter":34,"./ReactClass":37,"./ReactComponentEnvironment":40,"./ReactEmptyComponent":62,"./ReactNativeComponent":76,"./ReactPerf":79,"./ReactRootIndex":86,"./ReactUpdates":91}],68:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -10737,7 +13259,7 @@ var ReactInputSelection = {
 };
 
 module.exports = ReactInputSelection;
-},{"./ReactDOMSelection":51,"fbjs/lib/containsNode":140,"fbjs/lib/focusNode":145,"fbjs/lib/getActiveElement":146}],68:[function(require,module,exports){
+},{"./ReactDOMSelection":52,"fbjs/lib/containsNode":141,"fbjs/lib/focusNode":146,"fbjs/lib/getActiveElement":147}],69:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -11042,7 +13564,7 @@ var ReactInstanceHandles = {
 
 module.exports = ReactInstanceHandles;
 }).call(this,require('_process'))
-},{"./ReactRootIndex":85,"_process":5,"fbjs/lib/invariant":151}],69:[function(require,module,exports){
+},{"./ReactRootIndex":86,"_process":5,"fbjs/lib/invariant":152}],70:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -11090,7 +13612,7 @@ var ReactInstanceMap = {
 };
 
 module.exports = ReactInstanceMap;
-},{}],70:[function(require,module,exports){
+},{}],71:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -11167,7 +13689,7 @@ var React = {
 
 module.exports = React;
 }).call(this,require('_process'))
-},{"./Object.assign":29,"./ReactChildren":35,"./ReactClass":36,"./ReactComponent":37,"./ReactDOMFactories":45,"./ReactElement":59,"./ReactElementValidator":60,"./ReactPropTypes":81,"./ReactVersion":91,"./onlyChild":128,"_process":5}],71:[function(require,module,exports){
+},{"./Object.assign":30,"./ReactChildren":36,"./ReactClass":37,"./ReactComponent":38,"./ReactDOMFactories":46,"./ReactElement":60,"./ReactElementValidator":61,"./ReactPropTypes":82,"./ReactVersion":92,"./onlyChild":129,"_process":5}],72:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -11213,7 +13735,7 @@ var ReactMarkupChecksum = {
 };
 
 module.exports = ReactMarkupChecksum;
-},{"./adler32":110}],72:[function(require,module,exports){
+},{"./adler32":111}],73:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -12066,7 +14588,7 @@ ReactPerf.measureMethods(ReactMount, 'ReactMount', {
 
 module.exports = ReactMount;
 }).call(this,require('_process'))
-},{"./DOMProperty":16,"./Object.assign":29,"./ReactBrowserEventEmitter":33,"./ReactCurrentOwner":41,"./ReactDOMFeatureFlags":46,"./ReactElement":59,"./ReactEmptyComponentRegistry":62,"./ReactInstanceHandles":68,"./ReactInstanceMap":69,"./ReactMarkupChecksum":71,"./ReactPerf":78,"./ReactReconciler":83,"./ReactUpdateQueue":89,"./ReactUpdates":90,"./instantiateReactComponent":125,"./setInnerHTML":131,"./shouldUpdateReactComponent":133,"./validateDOMNesting":135,"_process":5,"fbjs/lib/containsNode":140,"fbjs/lib/emptyObject":144,"fbjs/lib/invariant":151,"fbjs/lib/warning":162}],73:[function(require,module,exports){
+},{"./DOMProperty":17,"./Object.assign":30,"./ReactBrowserEventEmitter":34,"./ReactCurrentOwner":42,"./ReactDOMFeatureFlags":47,"./ReactElement":60,"./ReactEmptyComponentRegistry":63,"./ReactInstanceHandles":69,"./ReactInstanceMap":70,"./ReactMarkupChecksum":72,"./ReactPerf":79,"./ReactReconciler":84,"./ReactUpdateQueue":90,"./ReactUpdates":91,"./instantiateReactComponent":126,"./setInnerHTML":132,"./shouldUpdateReactComponent":134,"./validateDOMNesting":136,"_process":5,"fbjs/lib/containsNode":141,"fbjs/lib/emptyObject":145,"fbjs/lib/invariant":152,"fbjs/lib/warning":163}],74:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -12565,7 +15087,7 @@ var ReactMultiChild = {
 
 module.exports = ReactMultiChild;
 }).call(this,require('_process'))
-},{"./ReactChildReconciler":34,"./ReactComponentEnvironment":39,"./ReactCurrentOwner":41,"./ReactMultiChildUpdateTypes":74,"./ReactReconciler":83,"./flattenChildren":116,"_process":5}],74:[function(require,module,exports){
+},{"./ReactChildReconciler":35,"./ReactComponentEnvironment":40,"./ReactCurrentOwner":42,"./ReactMultiChildUpdateTypes":75,"./ReactReconciler":84,"./flattenChildren":117,"_process":5}],75:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -12598,7 +15120,7 @@ var ReactMultiChildUpdateTypes = keyMirror({
 });
 
 module.exports = ReactMultiChildUpdateTypes;
-},{"fbjs/lib/keyMirror":154}],75:[function(require,module,exports){
+},{"fbjs/lib/keyMirror":155}],76:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014-2015, Facebook, Inc.
@@ -12695,7 +15217,7 @@ var ReactNativeComponent = {
 
 module.exports = ReactNativeComponent;
 }).call(this,require('_process'))
-},{"./Object.assign":29,"_process":5,"fbjs/lib/invariant":151}],76:[function(require,module,exports){
+},{"./Object.assign":30,"_process":5,"fbjs/lib/invariant":152}],77:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2015, Facebook, Inc.
@@ -12816,7 +15338,7 @@ var ReactNoopUpdateQueue = {
 
 module.exports = ReactNoopUpdateQueue;
 }).call(this,require('_process'))
-},{"_process":5,"fbjs/lib/warning":162}],77:[function(require,module,exports){
+},{"_process":5,"fbjs/lib/warning":163}],78:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -12910,7 +15432,7 @@ var ReactOwner = {
 
 module.exports = ReactOwner;
 }).call(this,require('_process'))
-},{"_process":5,"fbjs/lib/invariant":151}],78:[function(require,module,exports){
+},{"_process":5,"fbjs/lib/invariant":152}],79:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -13009,7 +15531,7 @@ function _noMeasure(objName, fnName, func) {
 
 module.exports = ReactPerf;
 }).call(this,require('_process'))
-},{"_process":5}],79:[function(require,module,exports){
+},{"_process":5}],80:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -13036,7 +15558,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 module.exports = ReactPropTypeLocationNames;
 }).call(this,require('_process'))
-},{"_process":5}],80:[function(require,module,exports){
+},{"_process":5}],81:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -13059,7 +15581,7 @@ var ReactPropTypeLocations = keyMirror({
 });
 
 module.exports = ReactPropTypeLocations;
-},{"fbjs/lib/keyMirror":154}],81:[function(require,module,exports){
+},{"fbjs/lib/keyMirror":155}],82:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -13416,7 +15938,7 @@ function getClassName(propValue) {
 }
 
 module.exports = ReactPropTypes;
-},{"./ReactElement":59,"./ReactPropTypeLocationNames":79,"./getIteratorFn":122,"fbjs/lib/emptyFunction":143}],82:[function(require,module,exports){
+},{"./ReactElement":60,"./ReactPropTypeLocationNames":80,"./getIteratorFn":123,"fbjs/lib/emptyFunction":144}],83:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -13568,7 +16090,7 @@ assign(ReactReconcileTransaction.prototype, Transaction.Mixin, Mixin);
 PooledClass.addPoolingTo(ReactReconcileTransaction);
 
 module.exports = ReactReconcileTransaction;
-},{"./CallbackQueue":12,"./Object.assign":29,"./PooledClass":30,"./ReactBrowserEventEmitter":33,"./ReactDOMFeatureFlags":46,"./ReactInputSelection":67,"./Transaction":107}],83:[function(require,module,exports){
+},{"./CallbackQueue":13,"./Object.assign":30,"./PooledClass":31,"./ReactBrowserEventEmitter":34,"./ReactDOMFeatureFlags":47,"./ReactInputSelection":68,"./Transaction":108}],84:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -13676,7 +16198,7 @@ var ReactReconciler = {
 };
 
 module.exports = ReactReconciler;
-},{"./ReactRef":84}],84:[function(require,module,exports){
+},{"./ReactRef":85}],85:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -13755,7 +16277,7 @@ ReactRef.detachRefs = function (instance, element) {
 };
 
 module.exports = ReactRef;
-},{"./ReactOwner":77}],85:[function(require,module,exports){
+},{"./ReactOwner":78}],86:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -13785,7 +16307,7 @@ var ReactRootIndex = {
 };
 
 module.exports = ReactRootIndex;
-},{}],86:[function(require,module,exports){
+},{}],87:[function(require,module,exports){
 /**
  * Copyright 2014-2015, Facebook, Inc.
  * All rights reserved.
@@ -13809,7 +16331,7 @@ var ReactServerBatchingStrategy = {
 };
 
 module.exports = ReactServerBatchingStrategy;
-},{}],87:[function(require,module,exports){
+},{}],88:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -13895,7 +16417,7 @@ module.exports = {
   renderToStaticMarkup: renderToStaticMarkup
 };
 }).call(this,require('_process'))
-},{"./ReactDefaultBatchingStrategy":55,"./ReactElement":59,"./ReactInstanceHandles":68,"./ReactMarkupChecksum":71,"./ReactServerBatchingStrategy":86,"./ReactServerRenderingTransaction":88,"./ReactUpdates":90,"./instantiateReactComponent":125,"_process":5,"fbjs/lib/emptyObject":144,"fbjs/lib/invariant":151}],88:[function(require,module,exports){
+},{"./ReactDefaultBatchingStrategy":56,"./ReactElement":60,"./ReactInstanceHandles":69,"./ReactMarkupChecksum":72,"./ReactServerBatchingStrategy":87,"./ReactServerRenderingTransaction":89,"./ReactUpdates":91,"./instantiateReactComponent":126,"_process":5,"fbjs/lib/emptyObject":145,"fbjs/lib/invariant":152}],89:[function(require,module,exports){
 /**
  * Copyright 2014-2015, Facebook, Inc.
  * All rights reserved.
@@ -13983,7 +16505,7 @@ assign(ReactServerRenderingTransaction.prototype, Transaction.Mixin, Mixin);
 PooledClass.addPoolingTo(ReactServerRenderingTransaction);
 
 module.exports = ReactServerRenderingTransaction;
-},{"./CallbackQueue":12,"./Object.assign":29,"./PooledClass":30,"./Transaction":107,"fbjs/lib/emptyFunction":143}],89:[function(require,module,exports){
+},{"./CallbackQueue":13,"./Object.assign":30,"./PooledClass":31,"./Transaction":108,"fbjs/lib/emptyFunction":144}],90:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2015, Facebook, Inc.
@@ -14243,7 +16765,7 @@ var ReactUpdateQueue = {
 
 module.exports = ReactUpdateQueue;
 }).call(this,require('_process'))
-},{"./Object.assign":29,"./ReactCurrentOwner":41,"./ReactElement":59,"./ReactInstanceMap":69,"./ReactUpdates":90,"_process":5,"fbjs/lib/invariant":151,"fbjs/lib/warning":162}],90:[function(require,module,exports){
+},{"./Object.assign":30,"./ReactCurrentOwner":42,"./ReactElement":60,"./ReactInstanceMap":70,"./ReactUpdates":91,"_process":5,"fbjs/lib/invariant":152,"fbjs/lib/warning":163}],91:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -14469,7 +16991,7 @@ var ReactUpdates = {
 
 module.exports = ReactUpdates;
 }).call(this,require('_process'))
-},{"./CallbackQueue":12,"./Object.assign":29,"./PooledClass":30,"./ReactPerf":78,"./ReactReconciler":83,"./Transaction":107,"_process":5,"fbjs/lib/invariant":151}],91:[function(require,module,exports){
+},{"./CallbackQueue":13,"./Object.assign":30,"./PooledClass":31,"./ReactPerf":79,"./ReactReconciler":84,"./Transaction":108,"_process":5,"fbjs/lib/invariant":152}],92:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -14484,7 +17006,7 @@ module.exports = ReactUpdates;
 'use strict';
 
 module.exports = '0.14.5';
-},{}],92:[function(require,module,exports){
+},{}],93:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -14612,7 +17134,7 @@ var SVGDOMPropertyConfig = {
 };
 
 module.exports = SVGDOMPropertyConfig;
-},{"./DOMProperty":16}],93:[function(require,module,exports){
+},{"./DOMProperty":17}],94:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -14814,7 +17336,7 @@ var SelectEventPlugin = {
 };
 
 module.exports = SelectEventPlugin;
-},{"./EventConstants":21,"./EventPropagators":25,"./ReactInputSelection":67,"./SyntheticEvent":99,"./isTextInputElement":127,"fbjs/lib/ExecutionEnvironment":137,"fbjs/lib/getActiveElement":146,"fbjs/lib/keyOf":155,"fbjs/lib/shallowEqual":160}],94:[function(require,module,exports){
+},{"./EventConstants":22,"./EventPropagators":26,"./ReactInputSelection":68,"./SyntheticEvent":100,"./isTextInputElement":128,"fbjs/lib/ExecutionEnvironment":138,"fbjs/lib/getActiveElement":147,"fbjs/lib/keyOf":156,"fbjs/lib/shallowEqual":161}],95:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -14844,7 +17366,7 @@ var ServerReactRootIndex = {
 };
 
 module.exports = ServerReactRootIndex;
-},{}],95:[function(require,module,exports){
+},{}],96:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -15434,7 +17956,7 @@ var SimpleEventPlugin = {
 
 module.exports = SimpleEventPlugin;
 }).call(this,require('_process'))
-},{"./EventConstants":21,"./EventPropagators":25,"./ReactMount":72,"./SyntheticClipboardEvent":96,"./SyntheticDragEvent":98,"./SyntheticEvent":99,"./SyntheticFocusEvent":100,"./SyntheticKeyboardEvent":102,"./SyntheticMouseEvent":103,"./SyntheticTouchEvent":104,"./SyntheticUIEvent":105,"./SyntheticWheelEvent":106,"./getEventCharCode":118,"_process":5,"fbjs/lib/EventListener":136,"fbjs/lib/emptyFunction":143,"fbjs/lib/invariant":151,"fbjs/lib/keyOf":155}],96:[function(require,module,exports){
+},{"./EventConstants":22,"./EventPropagators":26,"./ReactMount":73,"./SyntheticClipboardEvent":97,"./SyntheticDragEvent":99,"./SyntheticEvent":100,"./SyntheticFocusEvent":101,"./SyntheticKeyboardEvent":103,"./SyntheticMouseEvent":104,"./SyntheticTouchEvent":105,"./SyntheticUIEvent":106,"./SyntheticWheelEvent":107,"./getEventCharCode":119,"_process":5,"fbjs/lib/EventListener":137,"fbjs/lib/emptyFunction":144,"fbjs/lib/invariant":152,"fbjs/lib/keyOf":156}],97:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -15474,7 +17996,7 @@ function SyntheticClipboardEvent(dispatchConfig, dispatchMarker, nativeEvent, na
 SyntheticEvent.augmentClass(SyntheticClipboardEvent, ClipboardEventInterface);
 
 module.exports = SyntheticClipboardEvent;
-},{"./SyntheticEvent":99}],97:[function(require,module,exports){
+},{"./SyntheticEvent":100}],98:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -15512,7 +18034,7 @@ function SyntheticCompositionEvent(dispatchConfig, dispatchMarker, nativeEvent, 
 SyntheticEvent.augmentClass(SyntheticCompositionEvent, CompositionEventInterface);
 
 module.exports = SyntheticCompositionEvent;
-},{"./SyntheticEvent":99}],98:[function(require,module,exports){
+},{"./SyntheticEvent":100}],99:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -15550,7 +18072,7 @@ function SyntheticDragEvent(dispatchConfig, dispatchMarker, nativeEvent, nativeE
 SyntheticMouseEvent.augmentClass(SyntheticDragEvent, DragEventInterface);
 
 module.exports = SyntheticDragEvent;
-},{"./SyntheticMouseEvent":103}],99:[function(require,module,exports){
+},{"./SyntheticMouseEvent":104}],100:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -15730,7 +18252,7 @@ PooledClass.addPoolingTo(SyntheticEvent, PooledClass.fourArgumentPooler);
 
 module.exports = SyntheticEvent;
 }).call(this,require('_process'))
-},{"./Object.assign":29,"./PooledClass":30,"_process":5,"fbjs/lib/emptyFunction":143,"fbjs/lib/warning":162}],100:[function(require,module,exports){
+},{"./Object.assign":30,"./PooledClass":31,"_process":5,"fbjs/lib/emptyFunction":144,"fbjs/lib/warning":163}],101:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -15768,7 +18290,7 @@ function SyntheticFocusEvent(dispatchConfig, dispatchMarker, nativeEvent, native
 SyntheticUIEvent.augmentClass(SyntheticFocusEvent, FocusEventInterface);
 
 module.exports = SyntheticFocusEvent;
-},{"./SyntheticUIEvent":105}],101:[function(require,module,exports){
+},{"./SyntheticUIEvent":106}],102:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -15807,7 +18329,7 @@ function SyntheticInputEvent(dispatchConfig, dispatchMarker, nativeEvent, native
 SyntheticEvent.augmentClass(SyntheticInputEvent, InputEventInterface);
 
 module.exports = SyntheticInputEvent;
-},{"./SyntheticEvent":99}],102:[function(require,module,exports){
+},{"./SyntheticEvent":100}],103:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -15893,7 +18415,7 @@ function SyntheticKeyboardEvent(dispatchConfig, dispatchMarker, nativeEvent, nat
 SyntheticUIEvent.augmentClass(SyntheticKeyboardEvent, KeyboardEventInterface);
 
 module.exports = SyntheticKeyboardEvent;
-},{"./SyntheticUIEvent":105,"./getEventCharCode":118,"./getEventKey":119,"./getEventModifierState":120}],103:[function(require,module,exports){
+},{"./SyntheticUIEvent":106,"./getEventCharCode":119,"./getEventKey":120,"./getEventModifierState":121}],104:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -15967,7 +18489,7 @@ function SyntheticMouseEvent(dispatchConfig, dispatchMarker, nativeEvent, native
 SyntheticUIEvent.augmentClass(SyntheticMouseEvent, MouseEventInterface);
 
 module.exports = SyntheticMouseEvent;
-},{"./SyntheticUIEvent":105,"./ViewportMetrics":108,"./getEventModifierState":120}],104:[function(require,module,exports){
+},{"./SyntheticUIEvent":106,"./ViewportMetrics":109,"./getEventModifierState":121}],105:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -16014,7 +18536,7 @@ function SyntheticTouchEvent(dispatchConfig, dispatchMarker, nativeEvent, native
 SyntheticUIEvent.augmentClass(SyntheticTouchEvent, TouchEventInterface);
 
 module.exports = SyntheticTouchEvent;
-},{"./SyntheticUIEvent":105,"./getEventModifierState":120}],105:[function(require,module,exports){
+},{"./SyntheticUIEvent":106,"./getEventModifierState":121}],106:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -16075,7 +18597,7 @@ function SyntheticUIEvent(dispatchConfig, dispatchMarker, nativeEvent, nativeEve
 SyntheticEvent.augmentClass(SyntheticUIEvent, UIEventInterface);
 
 module.exports = SyntheticUIEvent;
-},{"./SyntheticEvent":99,"./getEventTarget":121}],106:[function(require,module,exports){
+},{"./SyntheticEvent":100,"./getEventTarget":122}],107:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -16131,7 +18653,7 @@ function SyntheticWheelEvent(dispatchConfig, dispatchMarker, nativeEvent, native
 SyntheticMouseEvent.augmentClass(SyntheticWheelEvent, WheelEventInterface);
 
 module.exports = SyntheticWheelEvent;
-},{"./SyntheticMouseEvent":103}],107:[function(require,module,exports){
+},{"./SyntheticMouseEvent":104}],108:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -16365,7 +18887,7 @@ var Transaction = {
 
 module.exports = Transaction;
 }).call(this,require('_process'))
-},{"_process":5,"fbjs/lib/invariant":151}],108:[function(require,module,exports){
+},{"_process":5,"fbjs/lib/invariant":152}],109:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -16393,7 +18915,7 @@ var ViewportMetrics = {
 };
 
 module.exports = ViewportMetrics;
-},{}],109:[function(require,module,exports){
+},{}],110:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014-2015, Facebook, Inc.
@@ -16455,7 +18977,7 @@ function accumulateInto(current, next) {
 
 module.exports = accumulateInto;
 }).call(this,require('_process'))
-},{"_process":5,"fbjs/lib/invariant":151}],110:[function(require,module,exports){
+},{"_process":5,"fbjs/lib/invariant":152}],111:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -16498,7 +19020,7 @@ function adler32(data) {
 }
 
 module.exports = adler32;
-},{}],111:[function(require,module,exports){
+},{}],112:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -16525,7 +19047,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 module.exports = canDefineProperty;
 }).call(this,require('_process'))
-},{"_process":5}],112:[function(require,module,exports){
+},{"_process":5}],113:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -16581,7 +19103,7 @@ function dangerousStyleValue(name, value) {
 }
 
 module.exports = dangerousStyleValue;
-},{"./CSSProperty":10}],113:[function(require,module,exports){
+},{"./CSSProperty":11}],114:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -16632,7 +19154,7 @@ function deprecated(fnName, newModule, newPackage, ctx, fn) {
 
 module.exports = deprecated;
 }).call(this,require('_process'))
-},{"./Object.assign":29,"_process":5,"fbjs/lib/warning":162}],114:[function(require,module,exports){
+},{"./Object.assign":30,"_process":5,"fbjs/lib/warning":163}],115:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -16671,7 +19193,7 @@ function escapeTextContentForBrowser(text) {
 }
 
 module.exports = escapeTextContentForBrowser;
-},{}],115:[function(require,module,exports){
+},{}],116:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -16723,7 +19245,7 @@ function findDOMNode(componentOrElement) {
 
 module.exports = findDOMNode;
 }).call(this,require('_process'))
-},{"./ReactCurrentOwner":41,"./ReactInstanceMap":69,"./ReactMount":72,"_process":5,"fbjs/lib/invariant":151,"fbjs/lib/warning":162}],116:[function(require,module,exports){
+},{"./ReactCurrentOwner":42,"./ReactInstanceMap":70,"./ReactMount":73,"_process":5,"fbjs/lib/invariant":152,"fbjs/lib/warning":163}],117:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -16774,7 +19296,7 @@ function flattenChildren(children) {
 
 module.exports = flattenChildren;
 }).call(this,require('_process'))
-},{"./traverseAllChildren":134,"_process":5,"fbjs/lib/warning":162}],117:[function(require,module,exports){
+},{"./traverseAllChildren":135,"_process":5,"fbjs/lib/warning":163}],118:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -16804,7 +19326,7 @@ var forEachAccumulated = function (arr, cb, scope) {
 };
 
 module.exports = forEachAccumulated;
-},{}],118:[function(require,module,exports){
+},{}],119:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -16855,7 +19377,7 @@ function getEventCharCode(nativeEvent) {
 }
 
 module.exports = getEventCharCode;
-},{}],119:[function(require,module,exports){
+},{}],120:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -16959,7 +19481,7 @@ function getEventKey(nativeEvent) {
 }
 
 module.exports = getEventKey;
-},{"./getEventCharCode":118}],120:[function(require,module,exports){
+},{"./getEventCharCode":119}],121:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -17004,7 +19526,7 @@ function getEventModifierState(nativeEvent) {
 }
 
 module.exports = getEventModifierState;
-},{}],121:[function(require,module,exports){
+},{}],122:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -17034,7 +19556,7 @@ function getEventTarget(nativeEvent) {
 }
 
 module.exports = getEventTarget;
-},{}],122:[function(require,module,exports){
+},{}],123:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -17075,7 +19597,7 @@ function getIteratorFn(maybeIterable) {
 }
 
 module.exports = getIteratorFn;
-},{}],123:[function(require,module,exports){
+},{}],124:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -17149,7 +19671,7 @@ function getNodeForCharacterOffset(root, offset) {
 }
 
 module.exports = getNodeForCharacterOffset;
-},{}],124:[function(require,module,exports){
+},{}],125:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -17183,7 +19705,7 @@ function getTextContentAccessor() {
 }
 
 module.exports = getTextContentAccessor;
-},{"fbjs/lib/ExecutionEnvironment":137}],125:[function(require,module,exports){
+},{"fbjs/lib/ExecutionEnvironment":138}],126:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -17298,7 +19820,7 @@ function instantiateReactComponent(node) {
 
 module.exports = instantiateReactComponent;
 }).call(this,require('_process'))
-},{"./Object.assign":29,"./ReactCompositeComponent":40,"./ReactEmptyComponent":61,"./ReactNativeComponent":75,"_process":5,"fbjs/lib/invariant":151,"fbjs/lib/warning":162}],126:[function(require,module,exports){
+},{"./Object.assign":30,"./ReactCompositeComponent":41,"./ReactEmptyComponent":62,"./ReactNativeComponent":76,"_process":5,"fbjs/lib/invariant":152,"fbjs/lib/warning":163}],127:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -17359,7 +19881,7 @@ function isEventSupported(eventNameSuffix, capture) {
 }
 
 module.exports = isEventSupported;
-},{"fbjs/lib/ExecutionEnvironment":137}],127:[function(require,module,exports){
+},{"fbjs/lib/ExecutionEnvironment":138}],128:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -17400,7 +19922,7 @@ function isTextInputElement(elem) {
 }
 
 module.exports = isTextInputElement;
-},{}],128:[function(require,module,exports){
+},{}],129:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -17436,7 +19958,7 @@ function onlyChild(children) {
 
 module.exports = onlyChild;
 }).call(this,require('_process'))
-},{"./ReactElement":59,"_process":5,"fbjs/lib/invariant":151}],129:[function(require,module,exports){
+},{"./ReactElement":60,"_process":5,"fbjs/lib/invariant":152}],130:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -17463,7 +19985,7 @@ function quoteAttributeValueForBrowser(value) {
 }
 
 module.exports = quoteAttributeValueForBrowser;
-},{"./escapeTextContentForBrowser":114}],130:[function(require,module,exports){
+},{"./escapeTextContentForBrowser":115}],131:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -17480,7 +20002,7 @@ module.exports = quoteAttributeValueForBrowser;
 var ReactMount = require('./ReactMount');
 
 module.exports = ReactMount.renderSubtreeIntoContainer;
-},{"./ReactMount":72}],131:[function(require,module,exports){
+},{"./ReactMount":73}],132:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -17571,7 +20093,7 @@ if (ExecutionEnvironment.canUseDOM) {
 }
 
 module.exports = setInnerHTML;
-},{"fbjs/lib/ExecutionEnvironment":137}],132:[function(require,module,exports){
+},{"fbjs/lib/ExecutionEnvironment":138}],133:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -17612,7 +20134,7 @@ if (ExecutionEnvironment.canUseDOM) {
 }
 
 module.exports = setTextContent;
-},{"./escapeTextContentForBrowser":114,"./setInnerHTML":131,"fbjs/lib/ExecutionEnvironment":137}],133:[function(require,module,exports){
+},{"./escapeTextContentForBrowser":115,"./setInnerHTML":132,"fbjs/lib/ExecutionEnvironment":138}],134:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -17656,7 +20178,7 @@ function shouldUpdateReactComponent(prevElement, nextElement) {
 }
 
 module.exports = shouldUpdateReactComponent;
-},{}],134:[function(require,module,exports){
+},{}],135:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -17848,7 +20370,7 @@ function traverseAllChildren(children, callback, traverseContext) {
 
 module.exports = traverseAllChildren;
 }).call(this,require('_process'))
-},{"./ReactCurrentOwner":41,"./ReactElement":59,"./ReactInstanceHandles":68,"./getIteratorFn":122,"_process":5,"fbjs/lib/invariant":151,"fbjs/lib/warning":162}],135:[function(require,module,exports){
+},{"./ReactCurrentOwner":42,"./ReactElement":60,"./ReactInstanceHandles":69,"./getIteratorFn":123,"_process":5,"fbjs/lib/invariant":152,"fbjs/lib/warning":163}],136:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2015, Facebook, Inc.
@@ -18214,7 +20736,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 module.exports = validateDOMNesting;
 }).call(this,require('_process'))
-},{"./Object.assign":29,"_process":5,"fbjs/lib/emptyFunction":143,"fbjs/lib/warning":162}],136:[function(require,module,exports){
+},{"./Object.assign":30,"_process":5,"fbjs/lib/emptyFunction":144,"fbjs/lib/warning":163}],137:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -18301,7 +20823,7 @@ var EventListener = {
 
 module.exports = EventListener;
 }).call(this,require('_process'))
-},{"./emptyFunction":143,"_process":5}],137:[function(require,module,exports){
+},{"./emptyFunction":144,"_process":5}],138:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -18338,7 +20860,7 @@ var ExecutionEnvironment = {
 };
 
 module.exports = ExecutionEnvironment;
-},{}],138:[function(require,module,exports){
+},{}],139:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -18371,7 +20893,7 @@ function camelize(string) {
 }
 
 module.exports = camelize;
-},{}],139:[function(require,module,exports){
+},{}],140:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -18412,7 +20934,7 @@ function camelizeStyleName(string) {
 }
 
 module.exports = camelizeStyleName;
-},{"./camelize":138}],140:[function(require,module,exports){
+},{"./camelize":139}],141:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -18468,7 +20990,7 @@ function containsNode(_x, _x2) {
 }
 
 module.exports = containsNode;
-},{"./isTextNode":153}],141:[function(require,module,exports){
+},{"./isTextNode":154}],142:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -18554,7 +21076,7 @@ function createArrayFromMixed(obj) {
 }
 
 module.exports = createArrayFromMixed;
-},{"./toArray":161}],142:[function(require,module,exports){
+},{"./toArray":162}],143:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -18641,7 +21163,7 @@ function createNodesFromMarkup(markup, handleScript) {
 
 module.exports = createNodesFromMarkup;
 }).call(this,require('_process'))
-},{"./ExecutionEnvironment":137,"./createArrayFromMixed":141,"./getMarkupWrap":147,"./invariant":151,"_process":5}],143:[function(require,module,exports){
+},{"./ExecutionEnvironment":138,"./createArrayFromMixed":142,"./getMarkupWrap":148,"./invariant":152,"_process":5}],144:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -18680,7 +21202,7 @@ emptyFunction.thatReturnsArgument = function (arg) {
 };
 
 module.exports = emptyFunction;
-},{}],144:[function(require,module,exports){
+},{}],145:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -18703,7 +21225,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 module.exports = emptyObject;
 }).call(this,require('_process'))
-},{"_process":5}],145:[function(require,module,exports){
+},{"_process":5}],146:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -18730,7 +21252,7 @@ function focusNode(node) {
 }
 
 module.exports = focusNode;
-},{}],146:[function(require,module,exports){
+},{}],147:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -18760,7 +21282,7 @@ function getActiveElement() /*?DOMElement*/{
 }
 
 module.exports = getActiveElement;
-},{}],147:[function(require,module,exports){
+},{}],148:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -18858,7 +21380,7 @@ function getMarkupWrap(nodeName) {
 
 module.exports = getMarkupWrap;
 }).call(this,require('_process'))
-},{"./ExecutionEnvironment":137,"./invariant":151,"_process":5}],148:[function(require,module,exports){
+},{"./ExecutionEnvironment":138,"./invariant":152,"_process":5}],149:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -18897,7 +21419,7 @@ function getUnboundedScrollPosition(scrollable) {
 }
 
 module.exports = getUnboundedScrollPosition;
-},{}],149:[function(require,module,exports){
+},{}],150:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -18931,7 +21453,7 @@ function hyphenate(string) {
 }
 
 module.exports = hyphenate;
-},{}],150:[function(require,module,exports){
+},{}],151:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -18971,7 +21493,7 @@ function hyphenateStyleName(string) {
 }
 
 module.exports = hyphenateStyleName;
-},{"./hyphenate":149}],151:[function(require,module,exports){
+},{"./hyphenate":150}],152:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -19024,7 +21546,7 @@ function invariant(condition, format, a, b, c, d, e, f) {
 
 module.exports = invariant;
 }).call(this,require('_process'))
-},{"_process":5}],152:[function(require,module,exports){
+},{"_process":5}],153:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -19048,7 +21570,7 @@ function isNode(object) {
 }
 
 module.exports = isNode;
-},{}],153:[function(require,module,exports){
+},{}],154:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -19074,7 +21596,7 @@ function isTextNode(object) {
 }
 
 module.exports = isTextNode;
-},{"./isNode":152}],154:[function(require,module,exports){
+},{"./isNode":153}],155:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -19125,7 +21647,7 @@ var keyMirror = function (obj) {
 
 module.exports = keyMirror;
 }).call(this,require('_process'))
-},{"./invariant":151,"_process":5}],155:[function(require,module,exports){
+},{"./invariant":152,"_process":5}],156:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -19161,7 +21683,7 @@ var keyOf = function (oneKeyObj) {
 };
 
 module.exports = keyOf;
-},{}],156:[function(require,module,exports){
+},{}],157:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -19213,7 +21735,7 @@ function mapObject(object, callback, context) {
 }
 
 module.exports = mapObject;
-},{}],157:[function(require,module,exports){
+},{}],158:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -19245,7 +21767,7 @@ function memoizeStringOnly(callback) {
 }
 
 module.exports = memoizeStringOnly;
-},{}],158:[function(require,module,exports){
+},{}],159:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -19269,7 +21791,7 @@ if (ExecutionEnvironment.canUseDOM) {
 }
 
 module.exports = performance || {};
-},{"./ExecutionEnvironment":137}],159:[function(require,module,exports){
+},{"./ExecutionEnvironment":138}],160:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -19304,7 +21826,7 @@ if (performance.now) {
 }
 
 module.exports = performanceNow;
-},{"./performance":158}],160:[function(require,module,exports){
+},{"./performance":159}],161:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -19355,7 +21877,7 @@ function shallowEqual(objA, objB) {
 }
 
 module.exports = shallowEqual;
-},{}],161:[function(require,module,exports){
+},{}],162:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -19415,7 +21937,7 @@ function toArray(obj) {
 
 module.exports = toArray;
 }).call(this,require('_process'))
-},{"./invariant":151,"_process":5}],162:[function(require,module,exports){
+},{"./invariant":152,"_process":5}],163:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014-2015, Facebook, Inc.
@@ -19475,12 +21997,12 @@ if (process.env.NODE_ENV !== 'production') {
 
 module.exports = warning;
 }).call(this,require('_process'))
-},{"./emptyFunction":143,"_process":5}],163:[function(require,module,exports){
+},{"./emptyFunction":144,"_process":5}],164:[function(require,module,exports){
 'use strict';
 
 module.exports = require('./lib/React');
 
-},{"./lib/React":31}],164:[function(require,module,exports){
+},{"./lib/React":32}],165:[function(require,module,exports){
 /*!
  * ReactFire is an open-source JavaScript library that allows you to add a
  * realtime data source to your React apps by providing an easy way to let
@@ -19847,9 +22369,9 @@ module.exports = require('./lib/React');
   return ReactFireMixin;
 }));
 
-},{}],165:[function(require,module,exports){
-module.exports={"abandon":-2,"abandoned":-2,"abandons":-2,"abducted":-2,"abduction":-2,"abductions":-2,"abhor":-3,"abhorred":-3,"abhorrent":-3,"abhors":-3,"abilities":2,"ability":2,"aboard":1,"absentee":-1,"absentees":-1,"absolve":2,"absolved":2,"absolves":2,"absolving":2,"absorbed":1,"abuse":-3,"abused":-3,"abuses":-3,"abusive":-3,"accept":1,"accepted":1,"accepting":1,"accepts":1,"accident":-2,"accidental":-2,"accidentally":-2,"accidents":-2,"accomplish":2,"accomplished":2,"accomplishes":2,"accusation":-2,"accusations":-2,"accuse":-2,"accused":-2,"accuses":-2,"accusing":-2,"ache":-2,"achievable":1,"aching":-2,"acquit":2,"acquits":2,"acquitted":2,"acquitting":2,"acrimonious":-3,"active":1,"adequate":1,"admire":3,"admired":3,"admires":3,"admiring":3,"admit":-1,"admits":-1,"admitted":-1,"admonish":-2,"admonished":-2,"adopt":1,"adopts":1,"adorable":3,"adore":3,"adored":3,"adores":3,"advanced":1,"advantage":2,"advantages":2,"adventure":2,"adventures":2,"adventurous":2,"affected":-1,"affection":3,"affectionate":3,"afflicted":-1,"affronted":-1,"afraid":-2,"aggravate":-2,"aggravated":-2,"aggravates":-2,"aggravating":-2,"aggression":-2,"aggressions":-2,"aggressive":-2,"aghast":-2,"agog":2,"agonise":-3,"agonised":-3,"agonises":-3,"agonising":-3,"agonize":-3,"agonized":-3,"agonizes":-3,"agonizing":-3,"agree":1,"agreeable":2,"agreed":1,"agreement":1,"agrees":1,"alarm":-2,"alarmed":-2,"alarmist":-2,"alarmists":-2,"alas":-1,"alert":-1,"alienation":-2,"alive":1,"allergic":-2,"allow":1,"alone":-2,"amaze":2,"amazed":2,"amazes":2,"amazing":4,"ambitious":2,"ambivalent":-1,"amuse":3,"amused":3,"amusement":3,"amusements":3,"anger":-3,"angers":-3,"angry":-3,"anguish":-3,"anguished":-3,"animosity":-2,"annoy":-2,"annoyance":-2,"annoyed":-2,"annoying":-2,"annoys":-2,"antagonistic":-2,"anti":-1,"anticipation":1,"anxiety":-2,"anxious":-2,"apathetic":-3,"apathy":-3,"apeshit":-3,"apocalyptic":-2,"apologise":-1,"apologised":-1,"apologises":-1,"apologising":-1,"apologize":-1,"apologized":-1,"apologizes":-1,"apologizing":-1,"apology":-1,"appalled":-2,"appalling":-2,"appease":2,"appeased":2,"appeases":2,"appeasing":2,"applaud":2,"applauded":2,"applauding":2,"applauds":2,"applause":2,"appreciate":2,"appreciated":2,"appreciates":2,"appreciating":2,"appreciation":2,"apprehensive":-2,"approval":2,"approved":2,"approves":2,"ardent":1,"arrest":-2,"arrested":-3,"arrests":-2,"arrogant":-2,"ashame":-2,"ashamed":-2,"ass":-4,"assassination":-3,"assassinations":-3,"asset":2,"assets":2,"assfucking":-4,"asshole":-4,"astonished":2,"astound":3,"astounded":3,"astounding":3,"astoundingly":3,"astounds":3,"attack":-1,"attacked":-1,"attacking":-1,"attacks":-1,"attract":1,"attracted":1,"attracting":2,"attraction":2,"attractions":2,"attracts":1,"audacious":3,"authority":1,"avert":-1,"averted":-1,"averts":-1,"avid":2,"avoid":-1,"avoided":-1,"avoids":-1,"await":-1,"awaited":-1,"awaits":-1,"award":3,"awarded":3,"awards":3,"awesome":4,"awful":-3,"awkward":-2,"axe":-1,"axed":-1,"backed":1,"backing":2,"backs":1,"bad":-3,"badass":-3,"badly":-3,"bailout":-2,"bamboozle":-2,"bamboozled":-2,"bamboozles":-2,"ban":-2,"banish":-1,"bankrupt":-3,"bankster":-3,"banned":-2,"bargain":2,"barrier":-2,"bastard":-5,"bastards":-5,"battle":-1,"battles":-1,"beaten":-2,"beatific":3,"beating":-1,"beauties":3,"beautiful":3,"beautifully":3,"beautify":3,"belittle":-2,"belittled":-2,"beloved":3,"benefit":2,"benefits":2,"benefitted":2,"benefitting":2,"bereave":-2,"bereaved":-2,"bereaves":-2,"bereaving":-2,"best":3,"betray":-3,"betrayal":-3,"betrayed":-3,"betraying":-3,"betrays":-3,"better":2,"bias":-1,"biased":-2,"big":1,"bitch":-5,"bitches":-5,"bitter":-2,"bitterly":-2,"bizarre":-2,"blah":-2,"blame":-2,"blamed":-2,"blames":-2,"blaming":-2,"bless":2,"blesses":2,"blessing":3,"blind":-1,"bliss":3,"blissful":3,"blithe":2,"block":-1,"blockbuster":3,"blocked":-1,"blocking":-1,"blocks":-1,"bloody":-3,"blurry":-2,"boastful":-2,"bold":2,"boldly":2,"bomb":-1,"boost":1,"boosted":1,"boosting":1,"boosts":1,"bore":-2,"bored":-2,"boring":-3,"bother":-2,"bothered":-2,"bothers":-2,"bothersome":-2,"boycott":-2,"boycotted":-2,"boycotting":-2,"boycotts":-2,"brainwashing":-3,"brave":2,"breakthrough":3,"breathtaking":5,"bribe":-3,"bright":1,"brightest":2,"brightness":1,"brilliant":4,"brisk":2,"broke":-1,"broken":-1,"brooding":-2,"bullied":-2,"bullshit":-4,"bully":-2,"bullying":-2,"bummer":-2,"buoyant":2,"burden":-2,"burdened":-2,"burdening":-2,"burdens":-2,"calm":2,"calmed":2,"calming":2,"calms":2,"can't stand":-3,"cancel":-1,"cancelled":-1,"cancelling":-1,"cancels":-1,"cancer":-1,"capable":1,"captivated":3,"care":2,"carefree":1,"careful":2,"carefully":2,"careless":-2,"cares":2,"cashing in":-2,"casualty":-2,"catastrophe":-3,"catastrophic":-4,"cautious":-1,"celebrate":3,"celebrated":3,"celebrates":3,"celebrating":3,"censor":-2,"censored":-2,"censors":-2,"certain":1,"chagrin":-2,"chagrined":-2,"challenge":-1,"chance":2,"chances":2,"chaos":-2,"chaotic":-2,"charged":-3,"charges":-2,"charm":3,"charming":3,"charmless":-3,"chastise":-3,"chastised":-3,"chastises":-3,"chastising":-3,"cheat":-3,"cheated":-3,"cheater":-3,"cheaters":-3,"cheats":-3,"cheer":2,"cheered":2,"cheerful":2,"cheering":2,"cheerless":-2,"cheers":2,"cheery":3,"cherish":2,"cherished":2,"cherishes":2,"cherishing":2,"chic":2,"childish":-2,"chilling":-1,"choke":-2,"choked":-2,"chokes":-2,"choking":-2,"clarifies":2,"clarity":2,"clash":-2,"classy":3,"clean":2,"cleaner":2,"clear":1,"cleared":1,"clearly":1,"clears":1,"clever":2,"clouded":-1,"clueless":-2,"cock":-5,"cocksucker":-5,"cocksuckers":-5,"cocky":-2,"coerced":-2,"collapse":-2,"collapsed":-2,"collapses":-2,"collapsing":-2,"collide":-1,"collides":-1,"colliding":-1,"collision":-2,"collisions":-2,"colluding":-3,"combat":-1,"combats":-1,"comedy":1,"comfort":2,"comfortable":2,"comforting":2,"comforts":2,"commend":2,"commended":2,"commit":1,"commitment":2,"commits":1,"committed":1,"committing":1,"compassionate":2,"compelled":1,"competent":2,"competitive":2,"complacent":-2,"complain":-2,"complained":-2,"complains":-2,"comprehensive":2,"conciliate":2,"conciliated":2,"conciliates":2,"conciliating":2,"condemn":-2,"condemnation":-2,"condemned":-2,"condemns":-2,"confidence":2,"confident":2,"conflict":-2,"conflicting":-2,"conflictive":-2,"conflicts":-2,"confuse":-2,"confused":-2,"confusing":-2,"congrats":2,"congratulate":2,"congratulation":2,"congratulations":2,"consent":2,"consents":2,"consolable":2,"conspiracy":-3,"constrained":-2,"contagion":-2,"contagions":-2,"contagious":-1,"contempt":-2,"contemptuous":-2,"contemptuously":-2,"contend":-1,"contender":-1,"contending":-1,"contentious":-2,"contestable":-2,"controversial":-2,"controversially":-2,"convince":1,"convinced":1,"convinces":1,"convivial":2,"cool":1,"cool stuff":3,"cornered":-2,"corpse":-1,"costly":-2,"courage":2,"courageous":2,"courteous":2,"courtesy":2,"cover-up":-3,"coward":-2,"cowardly":-2,"coziness":2,"cramp":-1,"crap":-3,"crash":-2,"crazier":-2,"craziest":-2,"crazy":-2,"creative":2,"crestfallen":-2,"cried":-2,"cries":-2,"crime":-3,"criminal":-3,"criminals":-3,"crisis":-3,"critic":-2,"criticism":-2,"criticize":-2,"criticized":-2,"criticizes":-2,"criticizing":-2,"critics":-2,"cruel":-3,"cruelty":-3,"crush":-1,"crushed":-2,"crushes":-1,"crushing":-1,"cry":-1,"crying":-2,"cunt":-5,"curious":1,"curse":-1,"cut":-1,"cute":2,"cuts":-1,"cutting":-1,"cynic":-2,"cynical":-2,"cynicism":-2,"damage":-3,"damages":-3,"damn":-4,"damned":-4,"damnit":-4,"danger":-2,"daredevil":2,"daring":2,"darkest":-2,"darkness":-1,"dauntless":2,"dead":-3,"deadlock":-2,"deafening":-1,"dear":2,"dearly":3,"death":-2,"debonair":2,"debt":-2,"deceit":-3,"deceitful":-3,"deceive":-3,"deceived":-3,"deceives":-3,"deceiving":-3,"deception":-3,"decisive":1,"dedicated":2,"defeated":-2,"defect":-3,"defects":-3,"defender":2,"defenders":2,"defenseless":-2,"defer":-1,"deferring":-1,"defiant":-1,"deficit":-2,"degrade":-2,"degraded":-2,"degrades":-2,"dehumanize":-2,"dehumanized":-2,"dehumanizes":-2,"dehumanizing":-2,"deject":-2,"dejected":-2,"dejecting":-2,"dejects":-2,"delay":-1,"delayed":-1,"delight":3,"delighted":3,"delighting":3,"delights":3,"demand":-1,"demanded":-1,"demanding":-1,"demands":-1,"demonstration":-1,"demoralized":-2,"denied":-2,"denier":-2,"deniers":-2,"denies":-2,"denounce":-2,"denounces":-2,"deny":-2,"denying":-2,"depressed":-2,"depressing":-2,"derail":-2,"derailed":-2,"derails":-2,"deride":-2,"derided":-2,"derides":-2,"deriding":-2,"derision":-2,"desirable":2,"desire":1,"desired":2,"desirous":2,"despair":-3,"despairing":-3,"despairs":-3,"desperate":-3,"desperately":-3,"despondent":-3,"destroy":-3,"destroyed":-3,"destroying":-3,"destroys":-3,"destruction":-3,"destructive":-3,"detached":-1,"detain":-2,"detained":-2,"detention":-2,"determined":2,"devastate":-2,"devastated":-2,"devastating":-2,"devoted":3,"diamond":1,"dick":-4,"dickhead":-4,"die":-3,"died":-3,"difficult":-1,"diffident":-2,"dilemma":-1,"dipshit":-3,"dire":-3,"direful":-3,"dirt":-2,"dirtier":-2,"dirtiest":-2,"dirty":-2,"disabling":-1,"disadvantage":-2,"disadvantaged":-2,"disappear":-1,"disappeared":-1,"disappears":-1,"disappoint":-2,"disappointed":-2,"disappointing":-2,"disappointment":-2,"disappointments":-2,"disappoints":-2,"disaster":-2,"disasters":-2,"disastrous":-3,"disbelieve":-2,"discard":-1,"discarded":-1,"discarding":-1,"discards":-1,"disconsolate":-2,"disconsolation":-2,"discontented":-2,"discord":-2,"discounted":-1,"discouraged":-2,"discredited":-2,"disdain":-2,"disgrace":-2,"disgraced":-2,"disguise":-1,"disguised":-1,"disguises":-1,"disguising":-1,"disgust":-3,"disgusted":-3,"disgusting":-3,"disheartened":-2,"dishonest":-2,"disillusioned":-2,"disinclined":-2,"disjointed":-2,"dislike":-2,"dismal":-2,"dismayed":-2,"disorder":-2,"disorganized":-2,"disoriented":-2,"disparage":-2,"disparaged":-2,"disparages":-2,"disparaging":-2,"displeased":-2,"dispute":-2,"disputed":-2,"disputes":-2,"disputing":-2,"disqualified":-2,"disquiet":-2,"disregard":-2,"disregarded":-2,"disregarding":-2,"disregards":-2,"disrespect":-2,"disrespected":-2,"disruption":-2,"disruptions":-2,"disruptive":-2,"dissatisfied":-2,"distort":-2,"distorted":-2,"distorting":-2,"distorts":-2,"distract":-2,"distracted":-2,"distraction":-2,"distracts":-2,"distress":-2,"distressed":-2,"distresses":-2,"distressing":-2,"distrust":-3,"distrustful":-3,"disturb":-2,"disturbed":-2,"disturbing":-2,"disturbs":-2,"dithering":-2,"dizzy":-1,"dodging":-2,"dodgy":-2,"does not work":-3,"dolorous":-2,"dont like":-2,"doom":-2,"doomed":-2,"doubt":-1,"doubted":-1,"doubtful":-1,"doubting":-1,"doubts":-1,"douche":-3,"douchebag":-3,"downcast":-2,"downhearted":-2,"downside":-2,"drag":-1,"dragged":-1,"drags":-1,"drained":-2,"dread":-2,"dreaded":-2,"dreadful":-3,"dreading":-2,"dream":1,"dreams":1,"dreary":-2,"droopy":-2,"drop":-1,"drown":-2,"drowned":-2,"drowns":-2,"drunk":-2,"dubious":-2,"dud":-2,"dull":-2,"dumb":-3,"dumbass":-3,"dump":-1,"dumped":-2,"dumps":-1,"dupe":-2,"duped":-2,"dysfunction":-2,"eager":2,"earnest":2,"ease":2,"easy":1,"ecstatic":4,"eerie":-2,"eery":-2,"effective":2,"effectively":2,"elated":3,"elation":3,"elegant":2,"elegantly":2,"embarrass":-2,"embarrassed":-2,"embarrasses":-2,"embarrassing":-2,"embarrassment":-2,"embittered":-2,"embrace":1,"emergency":-2,"empathetic":2,"emptiness":-1,"empty":-1,"enchanted":2,"encourage":2,"encouraged":2,"encouragement":2,"encourages":2,"endorse":2,"endorsed":2,"endorsement":2,"endorses":2,"enemies":-2,"enemy":-2,"energetic":2,"engage":1,"engages":1,"engrossed":1,"enjoy":2,"enjoying":2,"enjoys":2,"enlighten":2,"enlightened":2,"enlightening":2,"enlightens":2,"ennui":-2,"enrage":-2,"enraged":-2,"enrages":-2,"enraging":-2,"enrapture":3,"enslave":-2,"enslaved":-2,"enslaves":-2,"ensure":1,"ensuring":1,"enterprising":1,"entertaining":2,"enthral":3,"enthusiastic":3,"entitled":1,"entrusted":2,"envies":-1,"envious":-2,"envy":-1,"envying":-1,"erroneous":-2,"error":-2,"errors":-2,"escape":-1,"escapes":-1,"escaping":-1,"esteemed":2,"ethical":2,"euphoria":3,"euphoric":4,"eviction":-1,"evil":-3,"exaggerate":-2,"exaggerated":-2,"exaggerates":-2,"exaggerating":-2,"exasperated":2,"excellence":3,"excellent":3,"excite":3,"excited":3,"excitement":3,"exciting":3,"exclude":-1,"excluded":-2,"exclusion":-1,"exclusive":2,"excuse":-1,"exempt":-1,"exhausted":-2,"exhilarated":3,"exhilarates":3,"exhilarating":3,"exonerate":2,"exonerated":2,"exonerates":2,"exonerating":2,"expand":1,"expands":1,"expel":-2,"expelled":-2,"expelling":-2,"expels":-2,"exploit":-2,"exploited":-2,"exploiting":-2,"exploits":-2,"exploration":1,"explorations":1,"expose":-1,"exposed":-1,"exposes":-1,"exposing":-1,"extend":1,"extends":1,"exuberant":4,"exultant":3,"exultantly":3,"fabulous":4,"fad":-2,"fag":-3,"faggot":-3,"faggots":-3,"fail":-2,"failed":-2,"failing":-2,"fails":-2,"failure":-2,"failures":-2,"fainthearted":-2,"fair":2,"faith":1,"faithful":3,"fake":-3,"fakes":-3,"faking":-3,"fallen":-2,"falling":-1,"falsified":-3,"falsify":-3,"fame":1,"fan":3,"fantastic":4,"farce":-1,"fascinate":3,"fascinated":3,"fascinates":3,"fascinating":3,"fascist":-2,"fascists":-2,"fatalities":-3,"fatality":-3,"fatigue":-2,"fatigued":-2,"fatigues":-2,"fatiguing":-2,"favor":2,"favored":2,"favorite":2,"favorited":2,"favorites":2,"favors":2,"fear":-2,"fearful":-2,"fearing":-2,"fearless":2,"fearsome":-2,"fed up":-3,"feeble":-2,"feeling":1,"felonies":-3,"felony":-3,"fervent":2,"fervid":2,"festive":2,"fiasco":-3,"fidgety":-2,"fight":-1,"fine":2,"fire":-2,"fired":-2,"firing":-2,"fit":1,"fitness":1,"flagship":2,"flees":-1,"flop":-2,"flops":-2,"flu":-2,"flustered":-2,"focused":2,"fond":2,"fondness":2,"fool":-2,"foolish":-2,"fools":-2,"forced":-1,"foreclosure":-2,"foreclosures":-2,"forget":-1,"forgetful":-2,"forgive":1,"forgiving":1,"forgotten":-1,"fortunate":2,"frantic":-1,"fraud":-4,"frauds":-4,"fraudster":-4,"fraudsters":-4,"fraudulence":-4,"fraudulent":-4,"free":1,"freedom":2,"frenzy":-3,"fresh":1,"friendly":2,"fright":-2,"frightened":-2,"frightening":-3,"frikin":-2,"frisky":2,"frowning":-1,"frustrate":-2,"frustrated":-2,"frustrates":-2,"frustrating":-2,"frustration":-2,"ftw":3,"fuck":-4,"fucked":-4,"fucker":-4,"fuckers":-4,"fuckface":-4,"fuckhead":-4,"fucking":-4,"fucktard":-4,"fud":-3,"fuked":-4,"fuking":-4,"fulfill":2,"fulfilled":2,"fulfills":2,"fuming":-2,"fun":4,"funeral":-1,"funerals":-1,"funky":2,"funnier":4,"funny":4,"furious":-3,"futile":2,"gag":-2,"gagged":-2,"gain":2,"gained":2,"gaining":2,"gains":2,"gallant":3,"gallantly":3,"gallantry":3,"generous":2,"genial":3,"ghost":-1,"giddy":-2,"gift":2,"glad":3,"glamorous":3,"glamourous":3,"glee":3,"gleeful":3,"gloom":-1,"gloomy":-2,"glorious":2,"glory":2,"glum":-2,"god":1,"goddamn":-3,"godsend":4,"good":3,"goodness":3,"grace":1,"gracious":3,"grand":3,"grant":1,"granted":1,"granting":1,"grants":1,"grateful":3,"gratification":2,"grave":-2,"gray":-1,"great":3,"greater":3,"greatest":3,"greed":-3,"greedy":-2,"green wash":-3,"green washing":-3,"greenwash":-3,"greenwasher":-3,"greenwashers":-3,"greenwashing":-3,"greet":1,"greeted":1,"greeting":1,"greetings":2,"greets":1,"grey":-1,"grief":-2,"grieved":-2,"gross":-2,"growing":1,"growth":2,"guarantee":1,"guilt":-3,"guilty":-3,"gullibility":-2,"gullible":-2,"gun":-1,"ha":2,"hacked":-1,"haha":3,"hahaha":3,"hahahah":3,"hail":2,"hailed":2,"hapless":-2,"haplessness":-2,"happiness":3,"happy":3,"hard":-1,"hardier":2,"hardship":-2,"hardy":2,"harm":-2,"harmed":-2,"harmful":-2,"harming":-2,"harms":-2,"harried":-2,"harsh":-2,"harsher":-2,"harshest":-2,"hate":-3,"hated":-3,"haters":-3,"hates":-3,"hating":-3,"haunt":-1,"haunted":-2,"haunting":1,"haunts":-1,"havoc":-2,"healthy":2,"heartbreaking":-3,"heartbroken":-3,"heartfelt":3,"heaven":2,"heavenly":4,"heavyhearted":-2,"hell":-4,"help":2,"helpful":2,"helping":2,"helpless":-2,"helps":2,"hero":2,"heroes":2,"heroic":3,"hesitant":-2,"hesitate":-2,"hid":-1,"hide":-1,"hides":-1,"hiding":-1,"highlight":2,"hilarious":2,"hindrance":-2,"hoax":-2,"homesick":-2,"honest":2,"honor":2,"honored":2,"honoring":2,"honour":2,"honoured":2,"honouring":2,"hooligan":-2,"hooliganism":-2,"hooligans":-2,"hope":2,"hopeful":2,"hopefully":2,"hopeless":-2,"hopelessness":-2,"hopes":2,"hoping":2,"horrendous":-3,"horrible":-3,"horrific":-3,"horrified":-3,"hostile":-2,"huckster":-2,"hug":2,"huge":1,"hugs":2,"humerous":3,"humiliated":-3,"humiliation":-3,"humor":2,"humorous":2,"humour":2,"humourous":2,"hunger":-2,"hurrah":5,"hurt":-2,"hurting":-2,"hurts":-2,"hypocritical":-2,"hysteria":-3,"hysterical":-3,"hysterics":-3,"idiot":-3,"idiotic":-3,"ignorance":-2,"ignorant":-2,"ignore":-1,"ignored":-2,"ignores":-1,"ill":-2,"illegal":-3,"illiteracy":-2,"illness":-2,"illnesses":-2,"imbecile":-3,"immobilized":-1,"immortal":2,"immune":1,"impatient":-2,"imperfect":-2,"importance":2,"important":2,"impose":-1,"imposed":-1,"imposes":-1,"imposing":-1,"impotent":-2,"impress":3,"impressed":3,"impresses":3,"impressive":3,"imprisoned":-2,"improve":2,"improved":2,"improvement":2,"improves":2,"improving":2,"inability":-2,"inaction":-2,"inadequate":-2,"incapable":-2,"incapacitated":-2,"incensed":-2,"incompetence":-2,"incompetent":-2,"inconsiderate":-2,"inconvenience":-2,"inconvenient":-2,"increase":1,"increased":1,"indecisive":-2,"indestructible":2,"indifference":-2,"indifferent":-2,"indignant":-2,"indignation":-2,"indoctrinate":-2,"indoctrinated":-2,"indoctrinates":-2,"indoctrinating":-2,"ineffective":-2,"ineffectively":-2,"infatuated":2,"infatuation":2,"infected":-2,"inferior":-2,"inflamed":-2,"influential":2,"infringement":-2,"infuriate":-2,"infuriated":-2,"infuriates":-2,"infuriating":-2,"inhibit":-1,"injured":-2,"injury":-2,"injustice":-2,"innovate":1,"innovates":1,"innovation":1,"innovative":2,"inquisition":-2,"inquisitive":2,"insane":-2,"insanity":-2,"insecure":-2,"insensitive":-2,"insensitivity":-2,"insignificant":-2,"insipid":-2,"inspiration":2,"inspirational":2,"inspire":2,"inspired":2,"inspires":2,"inspiring":3,"insult":-2,"insulted":-2,"insulting":-2,"insults":-2,"intact":2,"integrity":2,"intelligent":2,"intense":1,"interest":1,"interested":2,"interesting":2,"interests":1,"interrogated":-2,"interrupt":-2,"interrupted":-2,"interrupting":-2,"interruption":-2,"interrupts":-2,"intimidate":-2,"intimidated":-2,"intimidates":-2,"intimidating":-2,"intimidation":-2,"intricate":2,"intrigues":1,"invincible":2,"invite":1,"inviting":1,"invulnerable":2,"irate":-3,"ironic":-1,"irony":-1,"irrational":-1,"irresistible":2,"irresolute":-2,"irresponsible":2,"irreversible":-1,"irritate":-3,"irritated":-3,"irritating":-3,"isolated":-1,"itchy":-2,"jackass":-4,"jackasses":-4,"jailed":-2,"jaunty":2,"jealous":-2,"jeopardy":-2,"jerk":-3,"jesus":1,"jewel":1,"jewels":1,"jocular":2,"join":1,"joke":2,"jokes":2,"jolly":2,"jovial":2,"joy":3,"joyful":3,"joyfully":3,"joyless":-2,"joyous":3,"jubilant":3,"jumpy":-1,"justice":2,"justifiably":2,"justified":2,"keen":1,"kill":-3,"killed":-3,"killing":-3,"kills":-3,"kind":2,"kinder":2,"kiss":2,"kudos":3,"lack":-2,"lackadaisical":-2,"lag":-1,"lagged":-2,"lagging":-2,"lags":-2,"lame":-2,"landmark":2,"laugh":1,"laughed":1,"laughing":1,"laughs":1,"laughting":1,"launched":1,"lawl":3,"lawsuit":-2,"lawsuits":-2,"lazy":-1,"leak":-1,"leaked":-1,"leave":-1,"legal":1,"legally":1,"lenient":1,"lethargic":-2,"lethargy":-2,"liar":-3,"liars":-3,"libelous":-2,"lied":-2,"lifesaver":4,"lighthearted":1,"like":2,"liked":2,"likes":2,"limitation":-1,"limited":-1,"limits":-1,"litigation":-1,"litigious":-2,"lively":2,"livid":-2,"lmao":4,"lmfao":4,"loathe":-3,"loathed":-3,"loathes":-3,"loathing":-3,"lobby":-2,"lobbying":-2,"lol":3,"lonely":-2,"lonesome":-2,"longing":-1,"loom":-1,"loomed":-1,"looming":-1,"looms":-1,"loose":-3,"looses":-3,"loser":-3,"losing":-3,"loss":-3,"lost":-3,"lovable":3,"love":3,"loved":3,"lovelies":3,"lovely":3,"loving":2,"lowest":-1,"loyal":3,"loyalty":3,"luck":3,"luckily":3,"lucky":3,"lugubrious":-2,"lunatic":-3,"lunatics":-3,"lurk":-1,"lurking":-1,"lurks":-1,"mad":-3,"maddening":-3,"made-up":-1,"madly":-3,"madness":-3,"mandatory":-1,"manipulated":-1,"manipulating":-1,"manipulation":-1,"marvel":3,"marvelous":3,"marvels":3,"masterpiece":4,"masterpieces":4,"matter":1,"matters":1,"mature":2,"meaningful":2,"meaningless":-2,"medal":3,"mediocrity":-3,"meditative":1,"melancholy":-2,"menace":-2,"menaced":-2,"mercy":2,"merry":3,"mess":-2,"messed":-2,"messing up":-2,"methodical":2,"mindless":-2,"miracle":4,"mirth":3,"mirthful":3,"mirthfully":3,"misbehave":-2,"misbehaved":-2,"misbehaves":-2,"misbehaving":-2,"mischief":-1,"mischiefs":-1,"miserable":-3,"misery":-2,"misgiving":-2,"misinformation":-2,"misinformed":-2,"misinterpreted":-2,"misleading":-3,"misread":-1,"misreporting":-2,"misrepresentation":-2,"miss":-2,"missed":-2,"missing":-2,"mistake":-2,"mistaken":-2,"mistakes":-2,"mistaking":-2,"misunderstand":-2,"misunderstanding":-2,"misunderstands":-2,"misunderstood":-2,"moan":-2,"moaned":-2,"moaning":-2,"moans":-2,"mock":-2,"mocked":-2,"mocking":-2,"mocks":-2,"mongering":-2,"monopolize":-2,"monopolized":-2,"monopolizes":-2,"monopolizing":-2,"moody":-1,"mope":-1,"moping":-1,"moron":-3,"motherfucker":-5,"motherfucking":-5,"motivate":1,"motivated":2,"motivating":2,"motivation":1,"mourn":-2,"mourned":-2,"mournful":-2,"mourning":-2,"mourns":-2,"mumpish":-2,"murder":-2,"murderer":-2,"murdering":-3,"murderous":-3,"murders":-2,"myth":-1,"n00b":-2,"naive":-2,"nasty":-3,"natural":1,"naïve":-2,"needy":-2,"negative":-2,"negativity":-2,"neglect":-2,"neglected":-2,"neglecting":-2,"neglects":-2,"nerves":-1,"nervous":-2,"nervously":-2,"nice":3,"nifty":2,"niggas":-5,"nigger":-5,"no":-1,"no fun":-3,"noble":2,"noisy":-1,"nonsense":-2,"noob":-2,"nosey":-2,"not good":-2,"not working":-3,"notorious":-2,"novel":2,"numb":-1,"nuts":-3,"obliterate":-2,"obliterated":-2,"obnoxious":-3,"obscene":-2,"obsessed":2,"obsolete":-2,"obstacle":-2,"obstacles":-2,"obstinate":-2,"odd":-2,"offend":-2,"offended":-2,"offender":-2,"offending":-2,"offends":-2,"offline":-1,"oks":2,"ominous":3,"once-in-a-lifetime":3,"opportunities":2,"opportunity":2,"oppressed":-2,"oppressive":-2,"optimism":2,"optimistic":2,"optionless":-2,"outcry":-2,"outmaneuvered":-2,"outrage":-3,"outraged":-3,"outreach":2,"outstanding":5,"overjoyed":4,"overload":-1,"overlooked":-1,"overreact":-2,"overreacted":-2,"overreaction":-2,"overreacts":-2,"oversell":-2,"overselling":-2,"oversells":-2,"oversimplification":-2,"oversimplified":-2,"oversimplifies":-2,"oversimplify":-2,"overstatement":-2,"overstatements":-2,"overweight":-1,"oxymoron":-1,"pain":-2,"pained":-2,"panic":-3,"panicked":-3,"panics":-3,"paradise":3,"paradox":-1,"pardon":2,"pardoned":2,"pardoning":2,"pardons":2,"parley":-1,"passionate":2,"passive":-1,"passively":-1,"pathetic":-2,"pay":-1,"peace":2,"peaceful":2,"peacefully":2,"penalty":-2,"pensive":-1,"perfect":3,"perfected":2,"perfectly":3,"perfects":2,"peril":-2,"perjury":-3,"perpetrator":-2,"perpetrators":-2,"perplexed":-2,"persecute":-2,"persecuted":-2,"persecutes":-2,"persecuting":-2,"perturbed":-2,"pesky":-2,"pessimism":-2,"pessimistic":-2,"petrified":-2,"phobic":-2,"picturesque":2,"pileup":-1,"pique":-2,"piqued":-2,"piss":-4,"pissed":-4,"pissing":-3,"piteous":-2,"pitied":-1,"pity":-2,"playful":2,"pleasant":3,"please":1,"pleased":3,"pleasure":3,"poised":-2,"poison":-2,"poisoned":-2,"poisons":-2,"pollute":-2,"polluted":-2,"polluter":-2,"polluters":-2,"pollutes":-2,"poor":-2,"poorer":-2,"poorest":-2,"popular":3,"positive":2,"positively":2,"possessive":-2,"postpone":-1,"postponed":-1,"postpones":-1,"postponing":-1,"poverty":-1,"powerful":2,"powerless":-2,"praise":3,"praised":3,"praises":3,"praising":3,"pray":1,"praying":1,"prays":1,"prblm":-2,"prblms":-2,"prepared":1,"pressure":-1,"pressured":-2,"pretend":-1,"pretending":-1,"pretends":-1,"pretty":1,"prevent":-1,"prevented":-1,"preventing":-1,"prevents":-1,"prick":-5,"prison":-2,"prisoner":-2,"prisoners":-2,"privileged":2,"proactive":2,"problem":-2,"problems":-2,"profiteer":-2,"progress":2,"prominent":2,"promise":1,"promised":1,"promises":1,"promote":1,"promoted":1,"promotes":1,"promoting":1,"propaganda":-2,"prosecute":-1,"prosecuted":-2,"prosecutes":-1,"prosecution":-1,"prospect":1,"prospects":1,"prosperous":3,"protect":1,"protected":1,"protects":1,"protest":-2,"protesters":-2,"protesting":-2,"protests":-2,"proud":2,"proudly":2,"provoke":-1,"provoked":-1,"provokes":-1,"provoking":-1,"pseudoscience":-3,"punish":-2,"punished":-2,"punishes":-2,"punitive":-2,"pushy":-1,"puzzled":-2,"quaking":-2,"questionable":-2,"questioned":-1,"questioning":-1,"racism":-3,"racist":-3,"racists":-3,"rage":-2,"rageful":-2,"rainy":-1,"rant":-3,"ranter":-3,"ranters":-3,"rants":-3,"rape":-4,"rapist":-4,"rapture":2,"raptured":2,"raptures":2,"rapturous":4,"rash":-2,"ratified":2,"reach":1,"reached":1,"reaches":1,"reaching":1,"reassure":1,"reassured":1,"reassures":1,"reassuring":2,"rebellion":-2,"recession":-2,"reckless":-2,"recommend":2,"recommended":2,"recommends":2,"redeemed":2,"refuse":-2,"refused":-2,"refusing":-2,"regret":-2,"regretful":-2,"regrets":-2,"regretted":-2,"regretting":-2,"reject":-1,"rejected":-1,"rejecting":-1,"rejects":-1,"rejoice":4,"rejoiced":4,"rejoices":4,"rejoicing":4,"relaxed":2,"relentless":-1,"reliant":2,"relieve":1,"relieved":2,"relieves":1,"relieving":2,"relishing":2,"remarkable":2,"remorse":-2,"repulse":-1,"repulsed":-2,"rescue":2,"rescued":2,"rescues":2,"resentful":-2,"resign":-1,"resigned":-1,"resigning":-1,"resigns":-1,"resolute":2,"resolve":2,"resolved":2,"resolves":2,"resolving":2,"respected":2,"responsible":2,"responsive":2,"restful":2,"restless":-2,"restore":1,"restored":1,"restores":1,"restoring":1,"restrict":-2,"restricted":-2,"restricting":-2,"restriction":-2,"restricts":-2,"retained":-1,"retard":-2,"retarded":-2,"retreat":-1,"revenge":-2,"revengeful":-2,"revered":2,"revive":2,"revives":2,"reward":2,"rewarded":2,"rewarding":2,"rewards":2,"rich":2,"ridiculous":-3,"rig":-1,"rigged":-1,"right direction":3,"rigorous":3,"rigorously":3,"riot":-2,"riots":-2,"risk":-2,"risks":-2,"rob":-2,"robber":-2,"robed":-2,"robing":-2,"robs":-2,"robust":2,"rofl":4,"roflcopter":4,"roflmao":4,"romance":2,"rotfl":4,"rotflmfao":4,"rotflol":4,"ruin":-2,"ruined":-2,"ruining":-2,"ruins":-2,"sabotage":-2,"sad":-2,"sadden":-2,"saddened":-2,"sadly":-2,"safe":1,"safely":1,"safety":1,"salient":1,"sappy":-1,"sarcastic":-2,"satisfied":2,"save":2,"saved":2,"scam":-2,"scams":-2,"scandal":-3,"scandalous":-3,"scandals":-3,"scapegoat":-2,"scapegoats":-2,"scare":-2,"scared":-2,"scary":-2,"sceptical":-2,"scold":-2,"scoop":3,"scorn":-2,"scornful":-2,"scream":-2,"screamed":-2,"screaming":-2,"screams":-2,"screwed":-2,"screwed up":-3,"scumbag":-4,"secure":2,"secured":2,"secures":2,"sedition":-2,"seditious":-2,"seduced":-1,"self-confident":2,"self-deluded":-2,"selfish":-3,"selfishness":-3,"sentence":-2,"sentenced":-2,"sentences":-2,"sentencing":-2,"serene":2,"severe":-2,"sexy":3,"shaky":-2,"shame":-2,"shamed":-2,"shameful":-2,"share":1,"shared":1,"shares":1,"shattered":-2,"shit":-4,"shithead":-4,"shitty":-3,"shock":-2,"shocked":-2,"shocking":-2,"shocks":-2,"shoot":-1,"short-sighted":-2,"short-sightedness":-2,"shortage":-2,"shortages":-2,"shrew":-4,"shy":-1,"sick":-2,"sigh":-2,"significance":1,"significant":1,"silencing":-1,"silly":-1,"sincere":2,"sincerely":2,"sincerest":2,"sincerity":2,"sinful":-3,"singleminded":-2,"skeptic":-2,"skeptical":-2,"skepticism":-2,"skeptics":-2,"slam":-2,"slash":-2,"slashed":-2,"slashes":-2,"slashing":-2,"slavery":-3,"sleeplessness":-2,"slick":2,"slicker":2,"slickest":2,"sluggish":-2,"slut":-5,"smart":1,"smarter":2,"smartest":2,"smear":-2,"smile":2,"smiled":2,"smiles":2,"smiling":2,"smog":-2,"sneaky":-1,"snub":-2,"snubbed":-2,"snubbing":-2,"snubs":-2,"sobering":1,"solemn":-1,"solid":2,"solidarity":2,"solution":1,"solutions":1,"solve":1,"solved":1,"solves":1,"solving":1,"somber":-2,"some kind":0,"son-of-a-bitch":-5,"soothe":3,"soothed":3,"soothing":3,"sophisticated":2,"sore":-1,"sorrow":-2,"sorrowful":-2,"sorry":-1,"spam":-2,"spammer":-3,"spammers":-3,"spamming":-2,"spark":1,"sparkle":3,"sparkles":3,"sparkling":3,"speculative":-2,"spirit":1,"spirited":2,"spiritless":-2,"spiteful":-2,"splendid":3,"sprightly":2,"squelched":-1,"stab":-2,"stabbed":-2,"stable":2,"stabs":-2,"stall":-2,"stalled":-2,"stalling":-2,"stamina":2,"stampede":-2,"startled":-2,"starve":-2,"starved":-2,"starves":-2,"starving":-2,"steadfast":2,"steal":-2,"steals":-2,"stereotype":-2,"stereotyped":-2,"stifled":-1,"stimulate":1,"stimulated":1,"stimulates":1,"stimulating":2,"stingy":-2,"stolen":-2,"stop":-1,"stopped":-1,"stopping":-1,"stops":-1,"stout":2,"straight":1,"strange":-1,"strangely":-1,"strangled":-2,"strength":2,"strengthen":2,"strengthened":2,"strengthening":2,"strengthens":2,"stressed":-2,"stressor":-2,"stressors":-2,"stricken":-2,"strike":-1,"strikers":-2,"strikes":-1,"strong":2,"stronger":2,"strongest":2,"struck":-1,"struggle":-2,"struggled":-2,"struggles":-2,"struggling":-2,"stubborn":-2,"stuck":-2,"stunned":-2,"stunning":4,"stupid":-2,"stupidly":-2,"suave":2,"substantial":1,"substantially":1,"subversive":-2,"success":2,"successful":3,"suck":-3,"sucks":-3,"suffer":-2,"suffering":-2,"suffers":-2,"suicidal":-2,"suicide":-2,"suing":-2,"sulking":-2,"sulky":-2,"sullen":-2,"sunshine":2,"super":3,"superb":5,"superior":2,"support":2,"supported":2,"supporter":1,"supporters":1,"supporting":1,"supportive":2,"supports":2,"survived":2,"surviving":2,"survivor":2,"suspect":-1,"suspected":-1,"suspecting":-1,"suspects":-1,"suspend":-1,"suspended":-1,"suspicious":-2,"swear":-2,"swearing":-2,"swears":-2,"sweet":2,"swift":2,"swiftly":2,"swindle":-3,"swindles":-3,"swindling":-3,"sympathetic":2,"sympathy":2,"tard":-2,"tears":-2,"tender":2,"tense":-2,"tension":-1,"terrible":-3,"terribly":-3,"terrific":4,"terrified":-3,"terror":-3,"terrorize":-3,"terrorized":-3,"terrorizes":-3,"thank":2,"thankful":2,"thanks":2,"thorny":-2,"thoughtful":2,"thoughtless":-2,"threat":-2,"threaten":-2,"threatened":-2,"threatening":-2,"threatens":-2,"threats":-2,"thrilled":5,"thwart":-2,"thwarted":-2,"thwarting":-2,"thwarts":-2,"timid":-2,"timorous":-2,"tired":-2,"tits":-2,"tolerant":2,"toothless":-2,"top":2,"tops":2,"torn":-2,"torture":-4,"tortured":-4,"tortures":-4,"torturing":-4,"totalitarian":-2,"totalitarianism":-2,"tout":-2,"touted":-2,"touting":-2,"touts":-2,"tragedy":-2,"tragic":-2,"tranquil":2,"trap":-1,"trapped":-2,"trauma":-3,"traumatic":-3,"travesty":-2,"treason":-3,"treasonous":-3,"treasure":2,"treasures":2,"trembling":-2,"tremulous":-2,"tricked":-2,"trickery":-2,"triumph":4,"triumphant":4,"trouble":-2,"troubled":-2,"troubles":-2,"true":2,"trust":1,"trusted":2,"tumor":-2,"twat":-5,"ugly":-3,"unacceptable":-2,"unappreciated":-2,"unapproved":-2,"unaware":-2,"unbelievable":-1,"unbelieving":-1,"unbiased":2,"uncertain":-1,"unclear":-1,"uncomfortable":-2,"unconcerned":-2,"unconfirmed":-1,"unconvinced":-1,"uncredited":-1,"undecided":-1,"underestimate":-1,"underestimated":-1,"underestimates":-1,"underestimating":-1,"undermine":-2,"undermined":-2,"undermines":-2,"undermining":-2,"undeserving":-2,"undesirable":-2,"uneasy":-2,"unemployment":-2,"unequal":-1,"unequaled":2,"unethical":-2,"unfair":-2,"unfocused":-2,"unfulfilled":-2,"unhappy":-2,"unhealthy":-2,"unified":1,"unimpressed":-2,"unintelligent":-2,"united":1,"unjust":-2,"unlovable":-2,"unloved":-2,"unmatched":1,"unmotivated":-2,"unprofessional":-2,"unresearched":-2,"unsatisfied":-2,"unsecured":-2,"unsettled":-1,"unsophisticated":-2,"unstable":-2,"unstoppable":2,"unsupported":-2,"unsure":-1,"untarnished":2,"unwanted":-2,"unworthy":-2,"upset":-2,"upsets":-2,"upsetting":-2,"uptight":-2,"urgent":-1,"useful":2,"usefulness":2,"useless":-2,"uselessness":-2,"vague":-2,"validate":1,"validated":1,"validates":1,"validating":1,"verdict":-1,"verdicts":-1,"vested":1,"vexation":-2,"vexing":-2,"vibrant":3,"vicious":-2,"victim":-3,"victimize":-3,"victimized":-3,"victimizes":-3,"victimizing":-3,"victims":-3,"vigilant":3,"vile":-3,"vindicate":2,"vindicated":2,"vindicates":2,"vindicating":2,"violate":-2,"violated":-2,"violates":-2,"violating":-2,"violence":-3,"violent":-3,"virtuous":2,"virulent":-2,"vision":1,"visionary":3,"visioning":1,"visions":1,"vitality":3,"vitamin":1,"vitriolic":-3,"vivacious":3,"vociferous":-1,"vulnerability":-2,"vulnerable":-2,"walkout":-2,"walkouts":-2,"wanker":-3,"want":1,"war":-2,"warfare":-2,"warm":1,"warmth":2,"warn":-2,"warned":-2,"warning":-3,"warnings":-3,"warns":-2,"waste":-1,"wasted":-2,"wasting":-2,"wavering":-1,"weak":-2,"weakness":-2,"wealth":3,"wealthy":2,"weary":-2,"weep":-2,"weeping":-2,"weird":-2,"welcome":2,"welcomed":2,"welcomes":2,"whimsical":1,"whitewash":-3,"whore":-4,"wicked":-2,"widowed":-1,"willingness":2,"win":4,"winner":4,"winning":4,"wins":4,"winwin":3,"wish":1,"wishes":1,"wishing":1,"withdrawal":-3,"woebegone":-2,"woeful":-3,"won":3,"wonderful":4,"woo":3,"woohoo":3,"wooo":4,"woow":4,"worn":-1,"worried":-3,"worry":-3,"worrying":-3,"worse":-3,"worsen":-3,"worsened":-3,"worsening":-3,"worsens":-3,"worshiped":3,"worst":-3,"worth":2,"worthless":-2,"worthy":2,"wow":4,"wowow":4,"wowww":4,"wrathful":-3,"wreck":-2,"wrong":-2,"wronged":-2,"wtf":-4,"yeah":1,"yearning":1,"yeees":2,"yes":1,"youthful":2,"yucky":-2,"yummy":3,"zealot":-2,"zealots":-2,"zealous":2}
 },{}],166:[function(require,module,exports){
+module.exports={"abandon":-2,"abandoned":-2,"abandons":-2,"abducted":-2,"abduction":-2,"abductions":-2,"abhor":-3,"abhorred":-3,"abhorrent":-3,"abhors":-3,"abilities":2,"ability":2,"aboard":1,"absentee":-1,"absentees":-1,"absolve":2,"absolved":2,"absolves":2,"absolving":2,"absorbed":1,"abuse":-3,"abused":-3,"abuses":-3,"abusive":-3,"accept":1,"accepted":1,"accepting":1,"accepts":1,"accident":-2,"accidental":-2,"accidentally":-2,"accidents":-2,"accomplish":2,"accomplished":2,"accomplishes":2,"accusation":-2,"accusations":-2,"accuse":-2,"accused":-2,"accuses":-2,"accusing":-2,"ache":-2,"achievable":1,"aching":-2,"acquit":2,"acquits":2,"acquitted":2,"acquitting":2,"acrimonious":-3,"active":1,"adequate":1,"admire":3,"admired":3,"admires":3,"admiring":3,"admit":-1,"admits":-1,"admitted":-1,"admonish":-2,"admonished":-2,"adopt":1,"adopts":1,"adorable":3,"adore":3,"adored":3,"adores":3,"advanced":1,"advantage":2,"advantages":2,"adventure":2,"adventures":2,"adventurous":2,"affected":-1,"affection":3,"affectionate":3,"afflicted":-1,"affronted":-1,"afraid":-2,"aggravate":-2,"aggravated":-2,"aggravates":-2,"aggravating":-2,"aggression":-2,"aggressions":-2,"aggressive":-2,"aghast":-2,"agog":2,"agonise":-3,"agonised":-3,"agonises":-3,"agonising":-3,"agonize":-3,"agonized":-3,"agonizes":-3,"agonizing":-3,"agree":1,"agreeable":2,"agreed":1,"agreement":1,"agrees":1,"alarm":-2,"alarmed":-2,"alarmist":-2,"alarmists":-2,"alas":-1,"alert":-1,"alienation":-2,"alive":1,"allergic":-2,"allow":1,"alone":-2,"amaze":2,"amazed":2,"amazes":2,"amazing":4,"ambitious":2,"ambivalent":-1,"amuse":3,"amused":3,"amusement":3,"amusements":3,"anger":-3,"angers":-3,"angry":-3,"anguish":-3,"anguished":-3,"animosity":-2,"annoy":-2,"annoyance":-2,"annoyed":-2,"annoying":-2,"annoys":-2,"antagonistic":-2,"anti":-1,"anticipation":1,"anxiety":-2,"anxious":-2,"apathetic":-3,"apathy":-3,"apeshit":-3,"apocalyptic":-2,"apologise":-1,"apologised":-1,"apologises":-1,"apologising":-1,"apologize":-1,"apologized":-1,"apologizes":-1,"apologizing":-1,"apology":-1,"appalled":-2,"appalling":-2,"appease":2,"appeased":2,"appeases":2,"appeasing":2,"applaud":2,"applauded":2,"applauding":2,"applauds":2,"applause":2,"appreciate":2,"appreciated":2,"appreciates":2,"appreciating":2,"appreciation":2,"apprehensive":-2,"approval":2,"approved":2,"approves":2,"ardent":1,"arrest":-2,"arrested":-3,"arrests":-2,"arrogant":-2,"ashame":-2,"ashamed":-2,"ass":-4,"assassination":-3,"assassinations":-3,"asset":2,"assets":2,"assfucking":-4,"asshole":-4,"astonished":2,"astound":3,"astounded":3,"astounding":3,"astoundingly":3,"astounds":3,"attack":-1,"attacked":-1,"attacking":-1,"attacks":-1,"attract":1,"attracted":1,"attracting":2,"attraction":2,"attractions":2,"attracts":1,"audacious":3,"authority":1,"avert":-1,"averted":-1,"averts":-1,"avid":2,"avoid":-1,"avoided":-1,"avoids":-1,"await":-1,"awaited":-1,"awaits":-1,"award":3,"awarded":3,"awards":3,"awesome":4,"awful":-3,"awkward":-2,"axe":-1,"axed":-1,"backed":1,"backing":2,"backs":1,"bad":-3,"badass":-3,"badly":-3,"bailout":-2,"bamboozle":-2,"bamboozled":-2,"bamboozles":-2,"ban":-2,"banish":-1,"bankrupt":-3,"bankster":-3,"banned":-2,"bargain":2,"barrier":-2,"bastard":-5,"bastards":-5,"battle":-1,"battles":-1,"beaten":-2,"beatific":3,"beating":-1,"beauties":3,"beautiful":3,"beautifully":3,"beautify":3,"belittle":-2,"belittled":-2,"beloved":3,"benefit":2,"benefits":2,"benefitted":2,"benefitting":2,"bereave":-2,"bereaved":-2,"bereaves":-2,"bereaving":-2,"best":3,"betray":-3,"betrayal":-3,"betrayed":-3,"betraying":-3,"betrays":-3,"better":2,"bias":-1,"biased":-2,"big":1,"bitch":-5,"bitches":-5,"bitter":-2,"bitterly":-2,"bizarre":-2,"blah":-2,"blame":-2,"blamed":-2,"blames":-2,"blaming":-2,"bless":2,"blesses":2,"blessing":3,"blind":-1,"bliss":3,"blissful":3,"blithe":2,"block":-1,"blockbuster":3,"blocked":-1,"blocking":-1,"blocks":-1,"bloody":-3,"blurry":-2,"boastful":-2,"bold":2,"boldly":2,"bomb":-1,"boost":1,"boosted":1,"boosting":1,"boosts":1,"bore":-2,"bored":-2,"boring":-3,"bother":-2,"bothered":-2,"bothers":-2,"bothersome":-2,"boycott":-2,"boycotted":-2,"boycotting":-2,"boycotts":-2,"brainwashing":-3,"brave":2,"breakthrough":3,"breathtaking":5,"bribe":-3,"bright":1,"brightest":2,"brightness":1,"brilliant":4,"brisk":2,"broke":-1,"broken":-1,"brooding":-2,"bullied":-2,"bullshit":-4,"bully":-2,"bullying":-2,"bummer":-2,"buoyant":2,"burden":-2,"burdened":-2,"burdening":-2,"burdens":-2,"calm":2,"calmed":2,"calming":2,"calms":2,"can't stand":-3,"cancel":-1,"cancelled":-1,"cancelling":-1,"cancels":-1,"cancer":-1,"capable":1,"captivated":3,"care":2,"carefree":1,"careful":2,"carefully":2,"careless":-2,"cares":2,"cashing in":-2,"casualty":-2,"catastrophe":-3,"catastrophic":-4,"cautious":-1,"celebrate":3,"celebrated":3,"celebrates":3,"celebrating":3,"censor":-2,"censored":-2,"censors":-2,"certain":1,"chagrin":-2,"chagrined":-2,"challenge":-1,"chance":2,"chances":2,"chaos":-2,"chaotic":-2,"charged":-3,"charges":-2,"charm":3,"charming":3,"charmless":-3,"chastise":-3,"chastised":-3,"chastises":-3,"chastising":-3,"cheat":-3,"cheated":-3,"cheater":-3,"cheaters":-3,"cheats":-3,"cheer":2,"cheered":2,"cheerful":2,"cheering":2,"cheerless":-2,"cheers":2,"cheery":3,"cherish":2,"cherished":2,"cherishes":2,"cherishing":2,"chic":2,"childish":-2,"chilling":-1,"choke":-2,"choked":-2,"chokes":-2,"choking":-2,"clarifies":2,"clarity":2,"clash":-2,"classy":3,"clean":2,"cleaner":2,"clear":1,"cleared":1,"clearly":1,"clears":1,"clever":2,"clouded":-1,"clueless":-2,"cock":-5,"cocksucker":-5,"cocksuckers":-5,"cocky":-2,"coerced":-2,"collapse":-2,"collapsed":-2,"collapses":-2,"collapsing":-2,"collide":-1,"collides":-1,"colliding":-1,"collision":-2,"collisions":-2,"colluding":-3,"combat":-1,"combats":-1,"comedy":1,"comfort":2,"comfortable":2,"comforting":2,"comforts":2,"commend":2,"commended":2,"commit":1,"commitment":2,"commits":1,"committed":1,"committing":1,"compassionate":2,"compelled":1,"competent":2,"competitive":2,"complacent":-2,"complain":-2,"complained":-2,"complains":-2,"comprehensive":2,"conciliate":2,"conciliated":2,"conciliates":2,"conciliating":2,"condemn":-2,"condemnation":-2,"condemned":-2,"condemns":-2,"confidence":2,"confident":2,"conflict":-2,"conflicting":-2,"conflictive":-2,"conflicts":-2,"confuse":-2,"confused":-2,"confusing":-2,"congrats":2,"congratulate":2,"congratulation":2,"congratulations":2,"consent":2,"consents":2,"consolable":2,"conspiracy":-3,"constrained":-2,"contagion":-2,"contagions":-2,"contagious":-1,"contempt":-2,"contemptuous":-2,"contemptuously":-2,"contend":-1,"contender":-1,"contending":-1,"contentious":-2,"contestable":-2,"controversial":-2,"controversially":-2,"convince":1,"convinced":1,"convinces":1,"convivial":2,"cool":1,"cool stuff":3,"cornered":-2,"corpse":-1,"costly":-2,"courage":2,"courageous":2,"courteous":2,"courtesy":2,"cover-up":-3,"coward":-2,"cowardly":-2,"coziness":2,"cramp":-1,"crap":-3,"crash":-2,"crazier":-2,"craziest":-2,"crazy":-2,"creative":2,"crestfallen":-2,"cried":-2,"cries":-2,"crime":-3,"criminal":-3,"criminals":-3,"crisis":-3,"critic":-2,"criticism":-2,"criticize":-2,"criticized":-2,"criticizes":-2,"criticizing":-2,"critics":-2,"cruel":-3,"cruelty":-3,"crush":-1,"crushed":-2,"crushes":-1,"crushing":-1,"cry":-1,"crying":-2,"cunt":-5,"curious":1,"curse":-1,"cut":-1,"cute":2,"cuts":-1,"cutting":-1,"cynic":-2,"cynical":-2,"cynicism":-2,"damage":-3,"damages":-3,"damn":-4,"damned":-4,"damnit":-4,"danger":-2,"daredevil":2,"daring":2,"darkest":-2,"darkness":-1,"dauntless":2,"dead":-3,"deadlock":-2,"deafening":-1,"dear":2,"dearly":3,"death":-2,"debonair":2,"debt":-2,"deceit":-3,"deceitful":-3,"deceive":-3,"deceived":-3,"deceives":-3,"deceiving":-3,"deception":-3,"decisive":1,"dedicated":2,"defeated":-2,"defect":-3,"defects":-3,"defender":2,"defenders":2,"defenseless":-2,"defer":-1,"deferring":-1,"defiant":-1,"deficit":-2,"degrade":-2,"degraded":-2,"degrades":-2,"dehumanize":-2,"dehumanized":-2,"dehumanizes":-2,"dehumanizing":-2,"deject":-2,"dejected":-2,"dejecting":-2,"dejects":-2,"delay":-1,"delayed":-1,"delight":3,"delighted":3,"delighting":3,"delights":3,"demand":-1,"demanded":-1,"demanding":-1,"demands":-1,"demonstration":-1,"demoralized":-2,"denied":-2,"denier":-2,"deniers":-2,"denies":-2,"denounce":-2,"denounces":-2,"deny":-2,"denying":-2,"depressed":-2,"depressing":-2,"derail":-2,"derailed":-2,"derails":-2,"deride":-2,"derided":-2,"derides":-2,"deriding":-2,"derision":-2,"desirable":2,"desire":1,"desired":2,"desirous":2,"despair":-3,"despairing":-3,"despairs":-3,"desperate":-3,"desperately":-3,"despondent":-3,"destroy":-3,"destroyed":-3,"destroying":-3,"destroys":-3,"destruction":-3,"destructive":-3,"detached":-1,"detain":-2,"detained":-2,"detention":-2,"determined":2,"devastate":-2,"devastated":-2,"devastating":-2,"devoted":3,"diamond":1,"dick":-4,"dickhead":-4,"die":-3,"died":-3,"difficult":-1,"diffident":-2,"dilemma":-1,"dipshit":-3,"dire":-3,"direful":-3,"dirt":-2,"dirtier":-2,"dirtiest":-2,"dirty":-2,"disabling":-1,"disadvantage":-2,"disadvantaged":-2,"disappear":-1,"disappeared":-1,"disappears":-1,"disappoint":-2,"disappointed":-2,"disappointing":-2,"disappointment":-2,"disappointments":-2,"disappoints":-2,"disaster":-2,"disasters":-2,"disastrous":-3,"disbelieve":-2,"discard":-1,"discarded":-1,"discarding":-1,"discards":-1,"disconsolate":-2,"disconsolation":-2,"discontented":-2,"discord":-2,"discounted":-1,"discouraged":-2,"discredited":-2,"disdain":-2,"disgrace":-2,"disgraced":-2,"disguise":-1,"disguised":-1,"disguises":-1,"disguising":-1,"disgust":-3,"disgusted":-3,"disgusting":-3,"disheartened":-2,"dishonest":-2,"disillusioned":-2,"disinclined":-2,"disjointed":-2,"dislike":-2,"dismal":-2,"dismayed":-2,"disorder":-2,"disorganized":-2,"disoriented":-2,"disparage":-2,"disparaged":-2,"disparages":-2,"disparaging":-2,"displeased":-2,"dispute":-2,"disputed":-2,"disputes":-2,"disputing":-2,"disqualified":-2,"disquiet":-2,"disregard":-2,"disregarded":-2,"disregarding":-2,"disregards":-2,"disrespect":-2,"disrespected":-2,"disruption":-2,"disruptions":-2,"disruptive":-2,"dissatisfied":-2,"distort":-2,"distorted":-2,"distorting":-2,"distorts":-2,"distract":-2,"distracted":-2,"distraction":-2,"distracts":-2,"distress":-2,"distressed":-2,"distresses":-2,"distressing":-2,"distrust":-3,"distrustful":-3,"disturb":-2,"disturbed":-2,"disturbing":-2,"disturbs":-2,"dithering":-2,"dizzy":-1,"dodging":-2,"dodgy":-2,"does not work":-3,"dolorous":-2,"dont like":-2,"doom":-2,"doomed":-2,"doubt":-1,"doubted":-1,"doubtful":-1,"doubting":-1,"doubts":-1,"douche":-3,"douchebag":-3,"downcast":-2,"downhearted":-2,"downside":-2,"drag":-1,"dragged":-1,"drags":-1,"drained":-2,"dread":-2,"dreaded":-2,"dreadful":-3,"dreading":-2,"dream":1,"dreams":1,"dreary":-2,"droopy":-2,"drop":-1,"drown":-2,"drowned":-2,"drowns":-2,"drunk":-2,"dubious":-2,"dud":-2,"dull":-2,"dumb":-3,"dumbass":-3,"dump":-1,"dumped":-2,"dumps":-1,"dupe":-2,"duped":-2,"dysfunction":-2,"eager":2,"earnest":2,"ease":2,"easy":1,"ecstatic":4,"eerie":-2,"eery":-2,"effective":2,"effectively":2,"elated":3,"elation":3,"elegant":2,"elegantly":2,"embarrass":-2,"embarrassed":-2,"embarrasses":-2,"embarrassing":-2,"embarrassment":-2,"embittered":-2,"embrace":1,"emergency":-2,"empathetic":2,"emptiness":-1,"empty":-1,"enchanted":2,"encourage":2,"encouraged":2,"encouragement":2,"encourages":2,"endorse":2,"endorsed":2,"endorsement":2,"endorses":2,"enemies":-2,"enemy":-2,"energetic":2,"engage":1,"engages":1,"engrossed":1,"enjoy":2,"enjoying":2,"enjoys":2,"enlighten":2,"enlightened":2,"enlightening":2,"enlightens":2,"ennui":-2,"enrage":-2,"enraged":-2,"enrages":-2,"enraging":-2,"enrapture":3,"enslave":-2,"enslaved":-2,"enslaves":-2,"ensure":1,"ensuring":1,"enterprising":1,"entertaining":2,"enthral":3,"enthusiastic":3,"entitled":1,"entrusted":2,"envies":-1,"envious":-2,"envy":-1,"envying":-1,"erroneous":-2,"error":-2,"errors":-2,"escape":-1,"escapes":-1,"escaping":-1,"esteemed":2,"ethical":2,"euphoria":3,"euphoric":4,"eviction":-1,"evil":-3,"exaggerate":-2,"exaggerated":-2,"exaggerates":-2,"exaggerating":-2,"exasperated":2,"excellence":3,"excellent":3,"excite":3,"excited":3,"excitement":3,"exciting":3,"exclude":-1,"excluded":-2,"exclusion":-1,"exclusive":2,"excuse":-1,"exempt":-1,"exhausted":-2,"exhilarated":3,"exhilarates":3,"exhilarating":3,"exonerate":2,"exonerated":2,"exonerates":2,"exonerating":2,"expand":1,"expands":1,"expel":-2,"expelled":-2,"expelling":-2,"expels":-2,"exploit":-2,"exploited":-2,"exploiting":-2,"exploits":-2,"exploration":1,"explorations":1,"expose":-1,"exposed":-1,"exposes":-1,"exposing":-1,"extend":1,"extends":1,"exuberant":4,"exultant":3,"exultantly":3,"fabulous":4,"fad":-2,"fag":-3,"faggot":-3,"faggots":-3,"fail":-2,"failed":-2,"failing":-2,"fails":-2,"failure":-2,"failures":-2,"fainthearted":-2,"fair":2,"faith":1,"faithful":3,"fake":-3,"fakes":-3,"faking":-3,"fallen":-2,"falling":-1,"falsified":-3,"falsify":-3,"fame":1,"fan":3,"fantastic":4,"farce":-1,"fascinate":3,"fascinated":3,"fascinates":3,"fascinating":3,"fascist":-2,"fascists":-2,"fatalities":-3,"fatality":-3,"fatigue":-2,"fatigued":-2,"fatigues":-2,"fatiguing":-2,"favor":2,"favored":2,"favorite":2,"favorited":2,"favorites":2,"favors":2,"fear":-2,"fearful":-2,"fearing":-2,"fearless":2,"fearsome":-2,"fed up":-3,"feeble":-2,"feeling":1,"felonies":-3,"felony":-3,"fervent":2,"fervid":2,"festive":2,"fiasco":-3,"fidgety":-2,"fight":-1,"fine":2,"fire":-2,"fired":-2,"firing":-2,"fit":1,"fitness":1,"flagship":2,"flees":-1,"flop":-2,"flops":-2,"flu":-2,"flustered":-2,"focused":2,"fond":2,"fondness":2,"fool":-2,"foolish":-2,"fools":-2,"forced":-1,"foreclosure":-2,"foreclosures":-2,"forget":-1,"forgetful":-2,"forgive":1,"forgiving":1,"forgotten":-1,"fortunate":2,"frantic":-1,"fraud":-4,"frauds":-4,"fraudster":-4,"fraudsters":-4,"fraudulence":-4,"fraudulent":-4,"free":1,"freedom":2,"frenzy":-3,"fresh":1,"friendly":2,"fright":-2,"frightened":-2,"frightening":-3,"frikin":-2,"frisky":2,"frowning":-1,"frustrate":-2,"frustrated":-2,"frustrates":-2,"frustrating":-2,"frustration":-2,"ftw":3,"fuck":-4,"fucked":-4,"fucker":-4,"fuckers":-4,"fuckface":-4,"fuckhead":-4,"fucking":-4,"fucktard":-4,"fud":-3,"fuked":-4,"fuking":-4,"fulfill":2,"fulfilled":2,"fulfills":2,"fuming":-2,"fun":4,"funeral":-1,"funerals":-1,"funky":2,"funnier":4,"funny":4,"furious":-3,"futile":2,"gag":-2,"gagged":-2,"gain":2,"gained":2,"gaining":2,"gains":2,"gallant":3,"gallantly":3,"gallantry":3,"generous":2,"genial":3,"ghost":-1,"giddy":-2,"gift":2,"glad":3,"glamorous":3,"glamourous":3,"glee":3,"gleeful":3,"gloom":-1,"gloomy":-2,"glorious":2,"glory":2,"glum":-2,"god":1,"goddamn":-3,"godsend":4,"good":3,"goodness":3,"grace":1,"gracious":3,"grand":3,"grant":1,"granted":1,"granting":1,"grants":1,"grateful":3,"gratification":2,"grave":-2,"gray":-1,"great":3,"greater":3,"greatest":3,"greed":-3,"greedy":-2,"green wash":-3,"green washing":-3,"greenwash":-3,"greenwasher":-3,"greenwashers":-3,"greenwashing":-3,"greet":1,"greeted":1,"greeting":1,"greetings":2,"greets":1,"grey":-1,"grief":-2,"grieved":-2,"gross":-2,"growing":1,"growth":2,"guarantee":1,"guilt":-3,"guilty":-3,"gullibility":-2,"gullible":-2,"gun":-1,"ha":2,"hacked":-1,"haha":3,"hahaha":3,"hahahah":3,"hail":2,"hailed":2,"hapless":-2,"haplessness":-2,"happiness":3,"happy":3,"hard":-1,"hardier":2,"hardship":-2,"hardy":2,"harm":-2,"harmed":-2,"harmful":-2,"harming":-2,"harms":-2,"harried":-2,"harsh":-2,"harsher":-2,"harshest":-2,"hate":-3,"hated":-3,"haters":-3,"hates":-3,"hating":-3,"haunt":-1,"haunted":-2,"haunting":1,"haunts":-1,"havoc":-2,"healthy":2,"heartbreaking":-3,"heartbroken":-3,"heartfelt":3,"heaven":2,"heavenly":4,"heavyhearted":-2,"hell":-4,"help":2,"helpful":2,"helping":2,"helpless":-2,"helps":2,"hero":2,"heroes":2,"heroic":3,"hesitant":-2,"hesitate":-2,"hid":-1,"hide":-1,"hides":-1,"hiding":-1,"highlight":2,"hilarious":2,"hindrance":-2,"hoax":-2,"homesick":-2,"honest":2,"honor":2,"honored":2,"honoring":2,"honour":2,"honoured":2,"honouring":2,"hooligan":-2,"hooliganism":-2,"hooligans":-2,"hope":2,"hopeful":2,"hopefully":2,"hopeless":-2,"hopelessness":-2,"hopes":2,"hoping":2,"horrendous":-3,"horrible":-3,"horrific":-3,"horrified":-3,"hostile":-2,"huckster":-2,"hug":2,"huge":1,"hugs":2,"humerous":3,"humiliated":-3,"humiliation":-3,"humor":2,"humorous":2,"humour":2,"humourous":2,"hunger":-2,"hurrah":5,"hurt":-2,"hurting":-2,"hurts":-2,"hypocritical":-2,"hysteria":-3,"hysterical":-3,"hysterics":-3,"idiot":-3,"idiotic":-3,"ignorance":-2,"ignorant":-2,"ignore":-1,"ignored":-2,"ignores":-1,"ill":-2,"illegal":-3,"illiteracy":-2,"illness":-2,"illnesses":-2,"imbecile":-3,"immobilized":-1,"immortal":2,"immune":1,"impatient":-2,"imperfect":-2,"importance":2,"important":2,"impose":-1,"imposed":-1,"imposes":-1,"imposing":-1,"impotent":-2,"impress":3,"impressed":3,"impresses":3,"impressive":3,"imprisoned":-2,"improve":2,"improved":2,"improvement":2,"improves":2,"improving":2,"inability":-2,"inaction":-2,"inadequate":-2,"incapable":-2,"incapacitated":-2,"incensed":-2,"incompetence":-2,"incompetent":-2,"inconsiderate":-2,"inconvenience":-2,"inconvenient":-2,"increase":1,"increased":1,"indecisive":-2,"indestructible":2,"indifference":-2,"indifferent":-2,"indignant":-2,"indignation":-2,"indoctrinate":-2,"indoctrinated":-2,"indoctrinates":-2,"indoctrinating":-2,"ineffective":-2,"ineffectively":-2,"infatuated":2,"infatuation":2,"infected":-2,"inferior":-2,"inflamed":-2,"influential":2,"infringement":-2,"infuriate":-2,"infuriated":-2,"infuriates":-2,"infuriating":-2,"inhibit":-1,"injured":-2,"injury":-2,"injustice":-2,"innovate":1,"innovates":1,"innovation":1,"innovative":2,"inquisition":-2,"inquisitive":2,"insane":-2,"insanity":-2,"insecure":-2,"insensitive":-2,"insensitivity":-2,"insignificant":-2,"insipid":-2,"inspiration":2,"inspirational":2,"inspire":2,"inspired":2,"inspires":2,"inspiring":3,"insult":-2,"insulted":-2,"insulting":-2,"insults":-2,"intact":2,"integrity":2,"intelligent":2,"intense":1,"interest":1,"interested":2,"interesting":2,"interests":1,"interrogated":-2,"interrupt":-2,"interrupted":-2,"interrupting":-2,"interruption":-2,"interrupts":-2,"intimidate":-2,"intimidated":-2,"intimidates":-2,"intimidating":-2,"intimidation":-2,"intricate":2,"intrigues":1,"invincible":2,"invite":1,"inviting":1,"invulnerable":2,"irate":-3,"ironic":-1,"irony":-1,"irrational":-1,"irresistible":2,"irresolute":-2,"irresponsible":2,"irreversible":-1,"irritate":-3,"irritated":-3,"irritating":-3,"isolated":-1,"itchy":-2,"jackass":-4,"jackasses":-4,"jailed":-2,"jaunty":2,"jealous":-2,"jeopardy":-2,"jerk":-3,"jesus":1,"jewel":1,"jewels":1,"jocular":2,"join":1,"joke":2,"jokes":2,"jolly":2,"jovial":2,"joy":3,"joyful":3,"joyfully":3,"joyless":-2,"joyous":3,"jubilant":3,"jumpy":-1,"justice":2,"justifiably":2,"justified":2,"keen":1,"kill":-3,"killed":-3,"killing":-3,"kills":-3,"kind":2,"kinder":2,"kiss":2,"kudos":3,"lack":-2,"lackadaisical":-2,"lag":-1,"lagged":-2,"lagging":-2,"lags":-2,"lame":-2,"landmark":2,"laugh":1,"laughed":1,"laughing":1,"laughs":1,"laughting":1,"launched":1,"lawl":3,"lawsuit":-2,"lawsuits":-2,"lazy":-1,"leak":-1,"leaked":-1,"leave":-1,"legal":1,"legally":1,"lenient":1,"lethargic":-2,"lethargy":-2,"liar":-3,"liars":-3,"libelous":-2,"lied":-2,"lifesaver":4,"lighthearted":1,"like":2,"liked":2,"likes":2,"limitation":-1,"limited":-1,"limits":-1,"litigation":-1,"litigious":-2,"lively":2,"livid":-2,"lmao":4,"lmfao":4,"loathe":-3,"loathed":-3,"loathes":-3,"loathing":-3,"lobby":-2,"lobbying":-2,"lol":3,"lonely":-2,"lonesome":-2,"longing":-1,"loom":-1,"loomed":-1,"looming":-1,"looms":-1,"loose":-3,"looses":-3,"loser":-3,"losing":-3,"loss":-3,"lost":-3,"lovable":3,"love":3,"loved":3,"lovelies":3,"lovely":3,"loving":2,"lowest":-1,"loyal":3,"loyalty":3,"luck":3,"luckily":3,"lucky":3,"lugubrious":-2,"lunatic":-3,"lunatics":-3,"lurk":-1,"lurking":-1,"lurks":-1,"mad":-3,"maddening":-3,"made-up":-1,"madly":-3,"madness":-3,"mandatory":-1,"manipulated":-1,"manipulating":-1,"manipulation":-1,"marvel":3,"marvelous":3,"marvels":3,"masterpiece":4,"masterpieces":4,"matter":1,"matters":1,"mature":2,"meaningful":2,"meaningless":-2,"medal":3,"mediocrity":-3,"meditative":1,"melancholy":-2,"menace":-2,"menaced":-2,"mercy":2,"merry":3,"mess":-2,"messed":-2,"messing up":-2,"methodical":2,"mindless":-2,"miracle":4,"mirth":3,"mirthful":3,"mirthfully":3,"misbehave":-2,"misbehaved":-2,"misbehaves":-2,"misbehaving":-2,"mischief":-1,"mischiefs":-1,"miserable":-3,"misery":-2,"misgiving":-2,"misinformation":-2,"misinformed":-2,"misinterpreted":-2,"misleading":-3,"misread":-1,"misreporting":-2,"misrepresentation":-2,"miss":-2,"missed":-2,"missing":-2,"mistake":-2,"mistaken":-2,"mistakes":-2,"mistaking":-2,"misunderstand":-2,"misunderstanding":-2,"misunderstands":-2,"misunderstood":-2,"moan":-2,"moaned":-2,"moaning":-2,"moans":-2,"mock":-2,"mocked":-2,"mocking":-2,"mocks":-2,"mongering":-2,"monopolize":-2,"monopolized":-2,"monopolizes":-2,"monopolizing":-2,"moody":-1,"mope":-1,"moping":-1,"moron":-3,"motherfucker":-5,"motherfucking":-5,"motivate":1,"motivated":2,"motivating":2,"motivation":1,"mourn":-2,"mourned":-2,"mournful":-2,"mourning":-2,"mourns":-2,"mumpish":-2,"murder":-2,"murderer":-2,"murdering":-3,"murderous":-3,"murders":-2,"myth":-1,"n00b":-2,"naive":-2,"nasty":-3,"natural":1,"naïve":-2,"needy":-2,"negative":-2,"negativity":-2,"neglect":-2,"neglected":-2,"neglecting":-2,"neglects":-2,"nerves":-1,"nervous":-2,"nervously":-2,"nice":3,"nifty":2,"niggas":-5,"nigger":-5,"no":-1,"no fun":-3,"noble":2,"noisy":-1,"nonsense":-2,"noob":-2,"nosey":-2,"not good":-2,"not working":-3,"notorious":-2,"novel":2,"numb":-1,"nuts":-3,"obliterate":-2,"obliterated":-2,"obnoxious":-3,"obscene":-2,"obsessed":2,"obsolete":-2,"obstacle":-2,"obstacles":-2,"obstinate":-2,"odd":-2,"offend":-2,"offended":-2,"offender":-2,"offending":-2,"offends":-2,"offline":-1,"oks":2,"ominous":3,"once-in-a-lifetime":3,"opportunities":2,"opportunity":2,"oppressed":-2,"oppressive":-2,"optimism":2,"optimistic":2,"optionless":-2,"outcry":-2,"outmaneuvered":-2,"outrage":-3,"outraged":-3,"outreach":2,"outstanding":5,"overjoyed":4,"overload":-1,"overlooked":-1,"overreact":-2,"overreacted":-2,"overreaction":-2,"overreacts":-2,"oversell":-2,"overselling":-2,"oversells":-2,"oversimplification":-2,"oversimplified":-2,"oversimplifies":-2,"oversimplify":-2,"overstatement":-2,"overstatements":-2,"overweight":-1,"oxymoron":-1,"pain":-2,"pained":-2,"panic":-3,"panicked":-3,"panics":-3,"paradise":3,"paradox":-1,"pardon":2,"pardoned":2,"pardoning":2,"pardons":2,"parley":-1,"passionate":2,"passive":-1,"passively":-1,"pathetic":-2,"pay":-1,"peace":2,"peaceful":2,"peacefully":2,"penalty":-2,"pensive":-1,"perfect":3,"perfected":2,"perfectly":3,"perfects":2,"peril":-2,"perjury":-3,"perpetrator":-2,"perpetrators":-2,"perplexed":-2,"persecute":-2,"persecuted":-2,"persecutes":-2,"persecuting":-2,"perturbed":-2,"pesky":-2,"pessimism":-2,"pessimistic":-2,"petrified":-2,"phobic":-2,"picturesque":2,"pileup":-1,"pique":-2,"piqued":-2,"piss":-4,"pissed":-4,"pissing":-3,"piteous":-2,"pitied":-1,"pity":-2,"playful":2,"pleasant":3,"please":1,"pleased":3,"pleasure":3,"poised":-2,"poison":-2,"poisoned":-2,"poisons":-2,"pollute":-2,"polluted":-2,"polluter":-2,"polluters":-2,"pollutes":-2,"poor":-2,"poorer":-2,"poorest":-2,"popular":3,"positive":2,"positively":2,"possessive":-2,"postpone":-1,"postponed":-1,"postpones":-1,"postponing":-1,"poverty":-1,"powerful":2,"powerless":-2,"praise":3,"praised":3,"praises":3,"praising":3,"pray":1,"praying":1,"prays":1,"prblm":-2,"prblms":-2,"prepared":1,"pressure":-1,"pressured":-2,"pretend":-1,"pretending":-1,"pretends":-1,"pretty":1,"prevent":-1,"prevented":-1,"preventing":-1,"prevents":-1,"prick":-5,"prison":-2,"prisoner":-2,"prisoners":-2,"privileged":2,"proactive":2,"problem":-2,"problems":-2,"profiteer":-2,"progress":2,"prominent":2,"promise":1,"promised":1,"promises":1,"promote":1,"promoted":1,"promotes":1,"promoting":1,"propaganda":-2,"prosecute":-1,"prosecuted":-2,"prosecutes":-1,"prosecution":-1,"prospect":1,"prospects":1,"prosperous":3,"protect":1,"protected":1,"protects":1,"protest":-2,"protesters":-2,"protesting":-2,"protests":-2,"proud":2,"proudly":2,"provoke":-1,"provoked":-1,"provokes":-1,"provoking":-1,"pseudoscience":-3,"punish":-2,"punished":-2,"punishes":-2,"punitive":-2,"pushy":-1,"puzzled":-2,"quaking":-2,"questionable":-2,"questioned":-1,"questioning":-1,"racism":-3,"racist":-3,"racists":-3,"rage":-2,"rageful":-2,"rainy":-1,"rant":-3,"ranter":-3,"ranters":-3,"rants":-3,"rape":-4,"rapist":-4,"rapture":2,"raptured":2,"raptures":2,"rapturous":4,"rash":-2,"ratified":2,"reach":1,"reached":1,"reaches":1,"reaching":1,"reassure":1,"reassured":1,"reassures":1,"reassuring":2,"rebellion":-2,"recession":-2,"reckless":-2,"recommend":2,"recommended":2,"recommends":2,"redeemed":2,"refuse":-2,"refused":-2,"refusing":-2,"regret":-2,"regretful":-2,"regrets":-2,"regretted":-2,"regretting":-2,"reject":-1,"rejected":-1,"rejecting":-1,"rejects":-1,"rejoice":4,"rejoiced":4,"rejoices":4,"rejoicing":4,"relaxed":2,"relentless":-1,"reliant":2,"relieve":1,"relieved":2,"relieves":1,"relieving":2,"relishing":2,"remarkable":2,"remorse":-2,"repulse":-1,"repulsed":-2,"rescue":2,"rescued":2,"rescues":2,"resentful":-2,"resign":-1,"resigned":-1,"resigning":-1,"resigns":-1,"resolute":2,"resolve":2,"resolved":2,"resolves":2,"resolving":2,"respected":2,"responsible":2,"responsive":2,"restful":2,"restless":-2,"restore":1,"restored":1,"restores":1,"restoring":1,"restrict":-2,"restricted":-2,"restricting":-2,"restriction":-2,"restricts":-2,"retained":-1,"retard":-2,"retarded":-2,"retreat":-1,"revenge":-2,"revengeful":-2,"revered":2,"revive":2,"revives":2,"reward":2,"rewarded":2,"rewarding":2,"rewards":2,"rich":2,"ridiculous":-3,"rig":-1,"rigged":-1,"right direction":3,"rigorous":3,"rigorously":3,"riot":-2,"riots":-2,"risk":-2,"risks":-2,"rob":-2,"robber":-2,"robed":-2,"robing":-2,"robs":-2,"robust":2,"rofl":4,"roflcopter":4,"roflmao":4,"romance":2,"rotfl":4,"rotflmfao":4,"rotflol":4,"ruin":-2,"ruined":-2,"ruining":-2,"ruins":-2,"sabotage":-2,"sad":-2,"sadden":-2,"saddened":-2,"sadly":-2,"safe":1,"safely":1,"safety":1,"salient":1,"sappy":-1,"sarcastic":-2,"satisfied":2,"save":2,"saved":2,"scam":-2,"scams":-2,"scandal":-3,"scandalous":-3,"scandals":-3,"scapegoat":-2,"scapegoats":-2,"scare":-2,"scared":-2,"scary":-2,"sceptical":-2,"scold":-2,"scoop":3,"scorn":-2,"scornful":-2,"scream":-2,"screamed":-2,"screaming":-2,"screams":-2,"screwed":-2,"screwed up":-3,"scumbag":-4,"secure":2,"secured":2,"secures":2,"sedition":-2,"seditious":-2,"seduced":-1,"self-confident":2,"self-deluded":-2,"selfish":-3,"selfishness":-3,"sentence":-2,"sentenced":-2,"sentences":-2,"sentencing":-2,"serene":2,"severe":-2,"sexy":3,"shaky":-2,"shame":-2,"shamed":-2,"shameful":-2,"share":1,"shared":1,"shares":1,"shattered":-2,"shit":-4,"shithead":-4,"shitty":-3,"shock":-2,"shocked":-2,"shocking":-2,"shocks":-2,"shoot":-1,"short-sighted":-2,"short-sightedness":-2,"shortage":-2,"shortages":-2,"shrew":-4,"shy":-1,"sick":-2,"sigh":-2,"significance":1,"significant":1,"silencing":-1,"silly":-1,"sincere":2,"sincerely":2,"sincerest":2,"sincerity":2,"sinful":-3,"singleminded":-2,"skeptic":-2,"skeptical":-2,"skepticism":-2,"skeptics":-2,"slam":-2,"slash":-2,"slashed":-2,"slashes":-2,"slashing":-2,"slavery":-3,"sleeplessness":-2,"slick":2,"slicker":2,"slickest":2,"sluggish":-2,"slut":-5,"smart":1,"smarter":2,"smartest":2,"smear":-2,"smile":2,"smiled":2,"smiles":2,"smiling":2,"smog":-2,"sneaky":-1,"snub":-2,"snubbed":-2,"snubbing":-2,"snubs":-2,"sobering":1,"solemn":-1,"solid":2,"solidarity":2,"solution":1,"solutions":1,"solve":1,"solved":1,"solves":1,"solving":1,"somber":-2,"some kind":0,"son-of-a-bitch":-5,"soothe":3,"soothed":3,"soothing":3,"sophisticated":2,"sore":-1,"sorrow":-2,"sorrowful":-2,"sorry":-1,"spam":-2,"spammer":-3,"spammers":-3,"spamming":-2,"spark":1,"sparkle":3,"sparkles":3,"sparkling":3,"speculative":-2,"spirit":1,"spirited":2,"spiritless":-2,"spiteful":-2,"splendid":3,"sprightly":2,"squelched":-1,"stab":-2,"stabbed":-2,"stable":2,"stabs":-2,"stall":-2,"stalled":-2,"stalling":-2,"stamina":2,"stampede":-2,"startled":-2,"starve":-2,"starved":-2,"starves":-2,"starving":-2,"steadfast":2,"steal":-2,"steals":-2,"stereotype":-2,"stereotyped":-2,"stifled":-1,"stimulate":1,"stimulated":1,"stimulates":1,"stimulating":2,"stingy":-2,"stolen":-2,"stop":-1,"stopped":-1,"stopping":-1,"stops":-1,"stout":2,"straight":1,"strange":-1,"strangely":-1,"strangled":-2,"strength":2,"strengthen":2,"strengthened":2,"strengthening":2,"strengthens":2,"stressed":-2,"stressor":-2,"stressors":-2,"stricken":-2,"strike":-1,"strikers":-2,"strikes":-1,"strong":2,"stronger":2,"strongest":2,"struck":-1,"struggle":-2,"struggled":-2,"struggles":-2,"struggling":-2,"stubborn":-2,"stuck":-2,"stunned":-2,"stunning":4,"stupid":-2,"stupidly":-2,"suave":2,"substantial":1,"substantially":1,"subversive":-2,"success":2,"successful":3,"suck":-3,"sucks":-3,"suffer":-2,"suffering":-2,"suffers":-2,"suicidal":-2,"suicide":-2,"suing":-2,"sulking":-2,"sulky":-2,"sullen":-2,"sunshine":2,"super":3,"superb":5,"superior":2,"support":2,"supported":2,"supporter":1,"supporters":1,"supporting":1,"supportive":2,"supports":2,"survived":2,"surviving":2,"survivor":2,"suspect":-1,"suspected":-1,"suspecting":-1,"suspects":-1,"suspend":-1,"suspended":-1,"suspicious":-2,"swear":-2,"swearing":-2,"swears":-2,"sweet":2,"swift":2,"swiftly":2,"swindle":-3,"swindles":-3,"swindling":-3,"sympathetic":2,"sympathy":2,"tard":-2,"tears":-2,"tender":2,"tense":-2,"tension":-1,"terrible":-3,"terribly":-3,"terrific":4,"terrified":-3,"terror":-3,"terrorize":-3,"terrorized":-3,"terrorizes":-3,"thank":2,"thankful":2,"thanks":2,"thorny":-2,"thoughtful":2,"thoughtless":-2,"threat":-2,"threaten":-2,"threatened":-2,"threatening":-2,"threatens":-2,"threats":-2,"thrilled":5,"thwart":-2,"thwarted":-2,"thwarting":-2,"thwarts":-2,"timid":-2,"timorous":-2,"tired":-2,"tits":-2,"tolerant":2,"toothless":-2,"top":2,"tops":2,"torn":-2,"torture":-4,"tortured":-4,"tortures":-4,"torturing":-4,"totalitarian":-2,"totalitarianism":-2,"tout":-2,"touted":-2,"touting":-2,"touts":-2,"tragedy":-2,"tragic":-2,"tranquil":2,"trap":-1,"trapped":-2,"trauma":-3,"traumatic":-3,"travesty":-2,"treason":-3,"treasonous":-3,"treasure":2,"treasures":2,"trembling":-2,"tremulous":-2,"tricked":-2,"trickery":-2,"triumph":4,"triumphant":4,"trouble":-2,"troubled":-2,"troubles":-2,"true":2,"trust":1,"trusted":2,"tumor":-2,"twat":-5,"ugly":-3,"unacceptable":-2,"unappreciated":-2,"unapproved":-2,"unaware":-2,"unbelievable":-1,"unbelieving":-1,"unbiased":2,"uncertain":-1,"unclear":-1,"uncomfortable":-2,"unconcerned":-2,"unconfirmed":-1,"unconvinced":-1,"uncredited":-1,"undecided":-1,"underestimate":-1,"underestimated":-1,"underestimates":-1,"underestimating":-1,"undermine":-2,"undermined":-2,"undermines":-2,"undermining":-2,"undeserving":-2,"undesirable":-2,"uneasy":-2,"unemployment":-2,"unequal":-1,"unequaled":2,"unethical":-2,"unfair":-2,"unfocused":-2,"unfulfilled":-2,"unhappy":-2,"unhealthy":-2,"unified":1,"unimpressed":-2,"unintelligent":-2,"united":1,"unjust":-2,"unlovable":-2,"unloved":-2,"unmatched":1,"unmotivated":-2,"unprofessional":-2,"unresearched":-2,"unsatisfied":-2,"unsecured":-2,"unsettled":-1,"unsophisticated":-2,"unstable":-2,"unstoppable":2,"unsupported":-2,"unsure":-1,"untarnished":2,"unwanted":-2,"unworthy":-2,"upset":-2,"upsets":-2,"upsetting":-2,"uptight":-2,"urgent":-1,"useful":2,"usefulness":2,"useless":-2,"uselessness":-2,"vague":-2,"validate":1,"validated":1,"validates":1,"validating":1,"verdict":-1,"verdicts":-1,"vested":1,"vexation":-2,"vexing":-2,"vibrant":3,"vicious":-2,"victim":-3,"victimize":-3,"victimized":-3,"victimizes":-3,"victimizing":-3,"victims":-3,"vigilant":3,"vile":-3,"vindicate":2,"vindicated":2,"vindicates":2,"vindicating":2,"violate":-2,"violated":-2,"violates":-2,"violating":-2,"violence":-3,"violent":-3,"virtuous":2,"virulent":-2,"vision":1,"visionary":3,"visioning":1,"visions":1,"vitality":3,"vitamin":1,"vitriolic":-3,"vivacious":3,"vociferous":-1,"vulnerability":-2,"vulnerable":-2,"walkout":-2,"walkouts":-2,"wanker":-3,"want":1,"war":-2,"warfare":-2,"warm":1,"warmth":2,"warn":-2,"warned":-2,"warning":-3,"warnings":-3,"warns":-2,"waste":-1,"wasted":-2,"wasting":-2,"wavering":-1,"weak":-2,"weakness":-2,"wealth":3,"wealthy":2,"weary":-2,"weep":-2,"weeping":-2,"weird":-2,"welcome":2,"welcomed":2,"welcomes":2,"whimsical":1,"whitewash":-3,"whore":-4,"wicked":-2,"widowed":-1,"willingness":2,"win":4,"winner":4,"winning":4,"wins":4,"winwin":3,"wish":1,"wishes":1,"wishing":1,"withdrawal":-3,"woebegone":-2,"woeful":-3,"won":3,"wonderful":4,"woo":3,"woohoo":3,"wooo":4,"woow":4,"worn":-1,"worried":-3,"worry":-3,"worrying":-3,"worse":-3,"worsen":-3,"worsened":-3,"worsening":-3,"worsens":-3,"worshiped":3,"worst":-3,"worth":2,"worthless":-2,"worthy":2,"wow":4,"wowow":4,"wowww":4,"wrathful":-3,"wreck":-2,"wrong":-2,"wronged":-2,"wtf":-4,"yeah":1,"yearning":1,"yeees":2,"yes":1,"youthful":2,"yucky":-2,"yummy":3,"zealot":-2,"zealots":-2,"zealous":2}
+},{}],167:[function(require,module,exports){
 (function (process){
 /**
  * AFINN-based sentiment analysis for Node.js
@@ -19924,7 +22446,7 @@ module.exports = function (phrase, inject, callback) {
 };
 
 }).call(this,require('_process'))
-},{"../build/AFINN.json":165,"./tokenize":167,"_process":5,"lodash.assign":168}],167:[function(require,module,exports){
+},{"../build/AFINN.json":166,"./tokenize":168,"_process":5,"lodash.assign":169}],168:[function(require,module,exports){
 /**
  * Remove special characters and returns an array of tokens (words).
  *
@@ -19940,7 +22462,7 @@ module.exports = function (input) {
         .split(' ');
 };
 
-},{}],168:[function(require,module,exports){
+},{}],169:[function(require,module,exports){
 /**
  * lodash 3.2.0 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
@@ -20022,7 +22544,7 @@ var assign = createAssigner(function(object, source, customizer) {
 
 module.exports = assign;
 
-},{"lodash._baseassign":169,"lodash._createassigner":171,"lodash.keys":175}],169:[function(require,module,exports){
+},{"lodash._baseassign":170,"lodash._createassigner":172,"lodash.keys":176}],170:[function(require,module,exports){
 /**
  * lodash 3.2.0 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
@@ -20051,7 +22573,7 @@ function baseAssign(object, source) {
 
 module.exports = baseAssign;
 
-},{"lodash._basecopy":170,"lodash.keys":175}],170:[function(require,module,exports){
+},{"lodash._basecopy":171,"lodash.keys":176}],171:[function(require,module,exports){
 /**
  * lodash 3.0.1 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
@@ -20085,7 +22607,7 @@ function baseCopy(source, props, object) {
 
 module.exports = baseCopy;
 
-},{}],171:[function(require,module,exports){
+},{}],172:[function(require,module,exports){
 /**
  * lodash 3.1.1 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
@@ -20139,7 +22661,7 @@ function createAssigner(assigner) {
 
 module.exports = createAssigner;
 
-},{"lodash._bindcallback":172,"lodash._isiterateecall":173,"lodash.restparam":174}],172:[function(require,module,exports){
+},{"lodash._bindcallback":173,"lodash._isiterateecall":174,"lodash.restparam":175}],173:[function(require,module,exports){
 /**
  * lodash 3.0.1 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
@@ -20206,7 +22728,7 @@ function identity(value) {
 
 module.exports = bindCallback;
 
-},{}],173:[function(require,module,exports){
+},{}],174:[function(require,module,exports){
 /**
  * lodash 3.0.9 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
@@ -20340,7 +22862,7 @@ function isObject(value) {
 
 module.exports = isIterateeCall;
 
-},{}],174:[function(require,module,exports){
+},{}],175:[function(require,module,exports){
 /**
  * lodash 3.6.1 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
@@ -20409,7 +22931,7 @@ function restParam(func, start) {
 
 module.exports = restParam;
 
-},{}],175:[function(require,module,exports){
+},{}],176:[function(require,module,exports){
 /**
  * lodash 3.1.2 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
@@ -20647,7 +23169,7 @@ function keysIn(object) {
 
 module.exports = keys;
 
-},{"lodash._getnative":176,"lodash.isarguments":177,"lodash.isarray":178}],176:[function(require,module,exports){
+},{"lodash._getnative":177,"lodash.isarguments":178,"lodash.isarray":179}],177:[function(require,module,exports){
 /**
  * lodash 3.9.1 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
@@ -20786,7 +23308,7 @@ function isNative(value) {
 
 module.exports = getNative;
 
-},{}],177:[function(require,module,exports){
+},{}],178:[function(require,module,exports){
 /**
  * lodash 3.0.4 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
@@ -20894,7 +23416,7 @@ function isArguments(value) {
 
 module.exports = isArguments;
 
-},{}],178:[function(require,module,exports){
+},{}],179:[function(require,module,exports){
 /**
  * lodash 3.0.4 (Custom Build) <https://lodash.com/>
  * Build: `lodash modern modularize exports="npm" -o ./`
