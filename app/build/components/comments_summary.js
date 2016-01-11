@@ -14,10 +14,6 @@ var CommentsSummary = React.createClass({displayName: "CommentsSummary",
     componentWillMount: function() {
         api.all_descendants(this.props.story, function(comment) {
 
-            if (typeof comment === "undefined" || comment === null) {
-                debugger;
-            }
-
             if (! comment.hasOwnProperty("deleted") || comment.deleted === false) {
                 var s_comp = sentiment(comment.text).comparative;
                 // update state
@@ -34,18 +30,18 @@ var CommentsSummary = React.createClass({displayName: "CommentsSummary",
     },
 
     render: function() {
-        var sum = 0;
-        var score = 0;
+        var comments_sum = 0;
+        var comments_mean = 0;
         var n_comments = this.state.sentiments.length;
 
         if (n_comments > 0) {
-            sum = this.state.sentiments.reduce(function(sum, current) {
+            comments_sum = this.state.sentiments.reduce(function(sum, current) {
                 return sum + current;
             }, 0);
 
-            score = sum / this.state.sentiments.length;
+            comments_mean = comments_sum / this.state.sentiments.length;
         }
-        var normalized = normalize(score, n_comments);
+        var normalized = normalize(comments_mean, n_comments);
         var color = chroma_scale(normalized);
         var style = {
             border: "1px solid gray",
@@ -57,7 +53,7 @@ var CommentsSummary = React.createClass({displayName: "CommentsSummary",
         // return <div>{n_comments},{sum},{mean}</div>;
         return React.createElement("div", null, 
             this.props.story.descendants, " comments", 
-            normalized, 
+            comments_mean, 
             React.createElement("span", {style: style})
         );
     }
@@ -76,30 +72,35 @@ var normalize = function(score, n_comments) {
     // differences close to the mean should be more apparent than differences far from it
     var from_mean;
     if (score >= mean) {
-        from_mean = normalcdf(mean, sd, comments_scale) - 0.5;
+        from_mean = normalcdf(comments_scale, mean, sd) - 0.5;
     } else {
-        from_mean = 0.5 - normalcdf(mean, sd, 2*mean - comments_scale);
+        from_mean = 0.5 - normalcdf(2*mean - comments_scale, mean, sd);
     }
     return from_mean;
 };
 
-// http://stackoverflow.com/questions/5259421/cumulative-distribution-function-in-javascript
-function normalcdf(mean, sigma, to)
-{
-    var z = (to-mean)/Math.sqrt(2*sigma*sigma);
-    var t = 1/(1+0.3275911*Math.abs(z));
+// modified from http://stackoverflow.com/a/14873282
+function normalcdf(x, mean, sd) {
+    return 0.5 * (1 + erf((x - mean) / (Math.sqrt(2 * sd * sd))));
+}
+
+function erf(x) {
+    // save the sign of x
+    var sign = (x >= 0) ? 1 : -1;
+    x = Math.abs(x);
+
+    // constants
     var a1 =  0.254829592;
     var a2 = -0.284496736;
     var a3 =  1.421413741;
     var a4 = -1.453152027;
     var a5 =  1.061405429;
-    var erf = 1-(((((a5*t + a4)*t) + a3)*t + a2)*t + a1)*t*Math.exp(-z*z);
-    var sign = 1;
-    if(z < 0)
-    {
-        sign = -1;
-    }
-    return (1/2)*(1+sign*erf);
+    var p  =  0.3275911;
+
+    // A&S formula 7.1.26
+    var t = 1.0/(1.0 + p*x);
+    var y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+    return sign * y; // erf(-x) = -erf(x);
 }
 
 // var each_comment = function(item, callback) {
