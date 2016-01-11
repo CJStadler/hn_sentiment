@@ -1,19 +1,25 @@
 var React = require('react'),
     sentiment = require('sentiment'),
+    router = require('react-router'),
+    Link = router.Link,
     chroma = require('chroma-js'),
-    api = require("../api.js"),
-    stats = require("../stats.js");
+    api = require("../libs/api.js"),
+    stats = require("../libs/stats.js");
 
 var chroma_scale = chroma.scale("RdBu").domain([-0.5, 0.5]);
 
 var CommentsSummary = React.createClass({
 
     getInitialState: function() {
-        return {sentiments: []};
+        return {sentiments: [], refs: []};
     },
 
     componentWillMount: function() {
-        api.all_descendants(this.props.story, function(comment) {
+        api.all_descendants(this.props.story, function(ref) {
+            var refs = this.state.refs.slice();
+            refs.push(ref);
+            this.setState({refs: refs});
+        }.bind(this), function(comment) {
 
             if (! comment.hasOwnProperty("deleted") || comment.deleted === false) {
                 var s_comp = sentiment(comment.text).comparative;
@@ -30,6 +36,12 @@ var CommentsSummary = React.createClass({
         }.bind(this));
     },
 
+    componentWillUnmount: function() {
+        this.state.refs.forEach(function(ref) {
+            ref.off();
+        });
+    },
+
     render: function() {
         var normalized_mean = stats.normalized_mean(this.state.sentiments);
         var color = chroma_scale(normalized_mean);
@@ -41,11 +53,10 @@ var CommentsSummary = React.createClass({
             backgroundColor: color
         };
         // return <div>{n_comments},{sum},{mean}</div>;
-        return <div>
+        return <Link to={"/story/" + this.props.story.id}>
             {this.props.story.descendants} comments
-            {normalized_mean}
             <span style={style}></span>
-        </div>;
+        </Link>;
     }
 
 });

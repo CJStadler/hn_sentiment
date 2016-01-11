@@ -1,43 +1,27 @@
 var React = require('react'),
     ReactDOM = require('react-dom'),
-    api = require("./api.js"),
-    ReactFireMixin = require('reactfire'),
-    Story = require('./components/story.js');
+    router = require('react-router'),
+    Router = router.Router,
+    Route = router.Route,
+    IndexRoute = router.IndexRoute,
+    browserHistory = router.browserHistory,
+    Index = require('./pages/index.js'),
+    Story = require('./pages/story.js');
 
 
 var App = React.createClass({displayName: "App",
-
-    getInitialState: function() {
-        return {stories: []};
-    },
-
-    componentWillMount: function() {
-
-        api.topstories(30, function(story) {
-            var stories = this.state.stories.slice();
-            stories.push(story);
-            this.setState({stories: stories});
-        }.bind(this));
-
-    },
-
-    componentWillUnmount: function() {
-        // do we need to turn off the firebase refs here?
-    },
-
     render: function() {
-        var stories;
-        if (this.state.stories.length === 0) {
-            stories = React.createElement("div", null, "Loading...");
-        } else {
-            stories = this.state.stories.map(function(story) {
-                return React.createElement(Story, {story: story, key: story.id});
-            })
-        }
-        return React.createElement("div", null, stories)
+        return React.createElement("div", null, this.props.children)
     }
 });
 
-ReactDOM.render(React.createElement(App, null), document.getElementById('app'));
+ReactDOM.render((
+    React.createElement(Router, {history: browserHistory}, 
+        React.createElement(Route, {path: "/", component: App}, 
+            React.createElement(IndexRoute, {component: Index}), 
+            React.createElement(Route, {path: "story/:id", component: Story})
+        )
+    )
+), document.getElementById('app'));
 
 module.exports = App;

@@ -9,7 +9,7 @@ var normalized_mean = function(sentiments) {
 
 // when there are more comments the score tends towards the mean, so this minimizes that
 var weight_by_comments = function(score, n_comments) {
-    return score * Math.log(n_comments); //
+    return score * Math.log(n_comments); // Log chosen somewhat arbitrarily
 };
 
 var mean = function(values) {

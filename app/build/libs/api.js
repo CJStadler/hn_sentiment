@@ -4,32 +4,25 @@ var base_url = "https://hacker-news.firebaseio.com/v0/";
 
 var api = {
     root_ref: new Firebase(base_url),
-    topstories: function(limit, callback) {
+    topstories: function(limit, refCollector, callback) {
         var ref = this.root_ref.child("topstories");
+        refCollector(ref);
+
         ref.limitToFirst(limit).on("child_added", function(story_id_obj) {
             var id = story_id_obj.val();
             // get story
-            this.item(id, function(item) {
+            this.item(id, refCollector, function(item) {
                 callback(item);
             });
 
         }.bind(this));
     },
-    item: function(id, callback) {
+    item: function(id, refCollector, callback) {
         var ref = this.root_ref.child("item/" + id);
+        refCollector(ref);
 
         ref.once("value", function(snapshot) {
             var item = snapshot.val();
-
-            // if (item.hasOwnProperty("kids") && item.kids.length > 0) {
-            //     item.kids.forEach(function(id,i) {
-            //         this.item(id, function(kid) {
-            //             item.kids[i] = kid;
-            //             //descendant_callback(kid)
-            //         });
-            //     }.bind(this));
-            // }
-
 
             if (typeof item !== "undefined" && item !== null) {
                 callback(item);
@@ -39,13 +32,14 @@ var api = {
 
         }.bind(this));
     },
-    all_descendants: function(parent, callback) {
+    all_descendants: function(parent, refCollector, callback) {
         var ref = this.root_ref.child("item/" + parent.id).child("kids");
-
+        refCollector(ref);
+        
         ref.on("child_added", function(id_obj) {
             var id = id_obj.val();
             // get object corresponding to id
-            this.item(id, function(item) {
+            this.item(id, refCollector, function(item) {
 
                 callback(item);
 
@@ -56,7 +50,7 @@ var api = {
                 parent.comments.push(item);
 
                 // recurse on item descendants
-                this.all_descendants(item, callback);
+                this.all_descendants(item, refCollector, callback);
 
             }.bind(this));
         }.bind(this));

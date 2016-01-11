@@ -2,7 +2,7 @@ var React = require('react'),
     CommentsSummary = require('./comments_summary.js');
 
 
-var Story = React.createClass({
+var StorySummary = React.createClass({
 
     render: function() {
         if (this.props.story === null) {
@@ -17,4 +17,4 @@ var Story = React.createClass({
     }
 });
 
-module.exports = Story;
+module.exports = StorySummary;
