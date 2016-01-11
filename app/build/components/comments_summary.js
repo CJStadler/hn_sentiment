@@ -31,19 +31,8 @@ var CommentsSummary = React.createClass({displayName: "CommentsSummary",
     },
 
     render: function() {
-        var comments_sum = 0;
-        var comments_mean = 0;
-        var n_comments = this.state.sentiments.length;
-
-        if (n_comments > 0) {
-            comments_sum = this.state.sentiments.reduce(function(sum, current) {
-                return sum + current;
-            }, 0);
-
-            comments_mean = comments_sum / this.state.sentiments.length;
-        }
-        var normalized = stats.normalize(comments_mean, n_comments);
-        var color = chroma_scale(normalized);
+        var normalized_mean = stats.normalized_mean(this.state.sentiments);
+        var color = chroma_scale(normalized_mean);
         var style = {
             border: "1px solid gray",
             display: "inline-block",
@@ -54,7 +43,7 @@ var CommentsSummary = React.createClass({displayName: "CommentsSummary",
         // return <div>{n_comments},{sum},{mean}</div>;
         return React.createElement("div", null, 
             this.props.story.descendants, " comments", 
-            comments_mean, 
+            normalized_mean, 
             React.createElement("span", {style: style})
         );
     }

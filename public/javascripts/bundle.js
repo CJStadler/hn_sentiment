@@ -144,19 +144,8 @@ var CommentsSummary = React.createClass({displayName: "CommentsSummary",
     },
 
     render: function() {
-        var comments_sum = 0;
-        var comments_mean = 0;
-        var n_comments = this.state.sentiments.length;
-
-        if (n_comments > 0) {
-            comments_sum = this.state.sentiments.reduce(function(sum, current) {
-                return sum + current;
-            }, 0);
-
-            comments_mean = comments_sum / this.state.sentiments.length;
-        }
-        var normalized = stats.normalize(comments_mean, n_comments);
-        var color = chroma_scale(normalized);
+        var normalized_mean = stats.normalized_mean(this.state.sentiments);
+        var color = chroma_scale(normalized_mean);
         var style = {
             border: "1px solid gray",
             display: "inline-block",
@@ -167,7 +156,7 @@ var CommentsSummary = React.createClass({displayName: "CommentsSummary",
         // return <div>{n_comments},{sum},{mean}</div>;
         return React.createElement("div", null, 
             this.props.story.descendants, " comments", 
-            comments_mean, 
+            normalized_mean, 
             React.createElement("span", {style: style})
         );
     }
@@ -210,20 +199,46 @@ var Story = React.createClass({displayName: "Story",
 module.exports = Story;
 
 },{"./comments_summary.js":3,"react":165}],5:[function(require,module,exports){
-var normalize = function(score, n_comments) {
+// a collection of statistical functions
+
+var normalized_mean = function(sentiments) {
+    var score = mean(sentiments);
+    score = weight_by_comments(score, sentiments.length);
+    score = normalize(score);
+    return score;
+};
+
+// when there are more comments the score tends towards the mean, so this minimizes that
+var weight_by_comments = function(score, n_comments) {
+    return score * Math.log(n_comments); //
+};
+
+var mean = function(values) {
+    var mean = 0;
+    var l = values.length;
+    if (l > 0) {
+        mean = sum(values) / l;
+    }
+    return mean;
+};
+
+var sum = function(values) {
+    return values.reduce(function(sum, current) {
+        return sum + current;
+    }, 0);
+};
+
+var normalize = function(score) {
     // measured values
     var mean = 0.106;
     var sd = 0.127;
 
-    // when there are more comments the score tends towards the mean, so this minimizes that
-    var comments_scale = score * Math.log(n_comments);
-
     // differences close to the mean should be more apparent than differences far from it
     var from_mean;
     if (score >= mean) {
-        from_mean = normalcdf(comments_scale, mean, sd) - 0.5;
+        from_mean = normalcdf(score, mean, sd) - 0.5;
     } else {
-        from_mean = 0.5 - normalcdf(2*mean - comments_scale, mean, sd);
+        from_mean = 0.5 - normalcdf(2*mean - score, mean, sd);
     }
     return from_mean;
 };
@@ -252,7 +267,7 @@ function erf(x) {
     return sign * y; // erf(-x) = -erf(x);
 }
 
-module.exports = {normalize: normalize};
+module.exports = {normalized_mean: normalized_mean};
 
 },{}],6:[function(require,module,exports){
 // shim for using process in browser
