@@ -4,7 +4,7 @@ var React = require('react'),
     StorySummary = require('../components/story_summary.js'),
     Comments = require('../components/comments.js');
 
-var Story = React.createClass({displayName: "Story",
+var Story = React.createClass({
 
     getInitialState: function() {
         return {story: null, sentiments: [], refs: []};
@@ -46,16 +46,16 @@ var Story = React.createClass({displayName: "Story",
         var comments;
         if (this.state.story !== null) {
             if (! this.state.condensed) {
-                comments = React.createElement(Comments, {story: this.state.story});
+                comments = <Comments story={this.state.story} />;
             }
-            content = React.createElement("div", null, 
-                React.createElement(StorySummary, {sentiments: this.state.sentiments, story: this.state.story}), 
-                comments
-            );
+            content = <div>
+                <StorySummary sentiments={this.state.sentiments} story={this.state.story} />
+                {comments}
+            </div>;
         }
-        return React.createElement("div", null, 
-            content
-        );
+        return <div>
+            {content}
+        </div>;
     },
 
     refCollector: function(ref) {

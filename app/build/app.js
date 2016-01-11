@@ -5,13 +5,17 @@ var React = require('react'),
     Route = router.Route,
     IndexRoute = router.IndexRoute,
     browserHistory = router.browserHistory,
+    IndexLink = router.IndexLink,
     Index = require('./pages/index.js'),
-    Story = require('./pages/story.js');
+    StoryPage = require('./pages/story_page.js');
 
 
 var App = React.createClass({displayName: "App",
     render: function() {
-        return React.createElement("div", null, this.props.children)
+        return React.createElement("div", null, 
+            React.createElement("div", null, React.createElement(IndexLink, {to: "/"}, "Index")), 
+            this.props.children
+        )
     }
 });
 
@@ -19,7 +23,7 @@ ReactDOM.render((
     React.createElement(Router, {history: browserHistory}, 
         React.createElement(Route, {path: "/", component: App}, 
             React.createElement(IndexRoute, {component: Index}), 
-            React.createElement(Route, {path: "story/:id", component: Story})
+            React.createElement(Route, {path: "story/:id", component: StoryPage})
         )
     )
 ), document.getElementById('app'));

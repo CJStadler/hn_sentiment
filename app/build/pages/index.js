@@ -1,40 +1,36 @@
 var React = require('react'),
     api = require("../libs/api.js"),
-    StorySummary = require('../components/story_summary.js');
+    Story = require('../components/story.js');
 
 var Index = React.createClass({displayName: "Index",
 
     getInitialState: function() {
-        return {stories: [], refs: []};
+        return {story_ids: [], ref: null};
     },
 
     componentWillMount: function() {
 
-        api.topstories(5, function(ref) {
-            var refs = this.state.refs.slice();
-            refs.push(ref);
-            this.setState({refs: refs});
-        }.bind(this), function(story) {
-            var stories = this.state.stories.slice();
-            stories.push(story);
-            this.setState({stories: stories});
+        api.topstories(10, function(ref) {
+            this.setState({ref: ref});
+        }.bind(this), function(id) {
+            var ids = this.state.story_ids.slice();
+            ids.push(id);
+            this.setState({story_ids: ids});
         }.bind(this));
 
     },
 
     componentWillUnmount: function() {
-        this.state.refs.forEach(function(ref) {
-            ref.off();
-        });
+        this.state.ref.off();
     },
 
     render: function() {
         var stories;
-        if (this.state.stories.length === 0) {
-            stories = React.createElement("div", null, "Loading...");
+        if (this.state.story_ids.length === 0) {
+            stories = "Loading...";
         } else {
-            stories = this.state.stories.map(function(story) {
-                return React.createElement(StorySummary, {story: story, key: story.id});
+            stories = this.state.story_ids.map(function(id) {
+                return React.createElement(Story, {condensed: true, id: id, key: id});
             })
         }
         return React.createElement("div", null, stories)

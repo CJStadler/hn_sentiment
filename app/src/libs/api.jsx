@@ -10,13 +10,10 @@ var api = {
 
         ref.limitToFirst(limit).on("child_added", function(story_id_obj) {
             var id = story_id_obj.val();
-            // get story
-            this.item(id, refCollector, function(item) {
-                callback(item);
-            });
-
-        }.bind(this));
+            callback(id);
+        });
     },
+
     item: function(id, refCollector, callback) {
         var ref = this.root_ref.child("item/" + id);
         refCollector(ref);
@@ -32,10 +29,11 @@ var api = {
 
         }.bind(this));
     },
+
     all_descendants: function(parent, refCollector, callback) {
         var ref = this.root_ref.child("item/" + parent.id).child("kids");
         refCollector(ref);
-        
+
         ref.on("child_added", function(id_obj) {
             var id = id_obj.val();
             // get object corresponding to id

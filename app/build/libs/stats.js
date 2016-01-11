@@ -1,5 +1,9 @@
 // a collection of statistical functions
 
+// measured values
+var exp_mean = 0.106;
+var exp_sd = 0.127;
+
 var normalized_mean = function(sentiments) {
     var score = mean(sentiments);
     score = weight_by_comments(score, sentiments.length);
@@ -28,26 +32,23 @@ var sum = function(values) {
 };
 
 var normalize = function(score) {
-    // measured values
-    var mean = 0.106;
-    var sd = 0.127;
 
     // differences close to the mean should be more apparent than differences far from it
     var from_mean;
     if (score >= mean) {
-        from_mean = normalcdf(score, mean, sd) - 0.5;
+        from_mean = normalcdf(score, exp_mean, exp_sd) - 0.5;
     } else {
-        from_mean = 0.5 - normalcdf(2*mean - score, mean, sd);
+        from_mean = 0.5 - normalcdf(2*exp_mean - score, exp_mean, exp_sd);
     }
     return from_mean;
 };
 
 // modified from http://stackoverflow.com/a/14873282
-function normalcdf(x, mean, sd) {
+var normalcdf = function(x, mean, sd) {
     return 0.5 * (1 + erf((x - mean) / (Math.sqrt(2 * sd * sd))));
-}
+};
 
-function erf(x) {
+var erf = function(x) {
     // save the sign of x
     var sign = (x >= 0) ? 1 : -1;
     x = Math.abs(x);
@@ -64,6 +65,6 @@ function erf(x) {
     var t = 1.0/(1.0 + p*x);
     var y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
     return sign * y; // erf(-x) = -erf(x);
-}
+};
 
-module.exports = {normalized_mean: normalized_mean};
+module.exports = {normalized_mean: normalized_mean, neutral_score: normalize(weight_by_comments(0, 200))};
