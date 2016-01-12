@@ -34,20 +34,32 @@ module.exports = App;
 },{"./pages/index.js":7,"./pages/story_page.js":8,"react":217,"react-dom":35,"react-router":55}],2:[function(require,module,exports){
 var React = require('react');
 
-var Comments = React.createClass({displayName: "Comments",
+var Comment = React.createClass({displayName: "Comment",
+
     render: function() {
-        return React.createElement("div", null);
+        var comments;
+        if (this.props.comment.hasOwnProperty("comments")) {
+            comments = this.props.comment.comments.map(function(comment) {
+                return React.createElement(Comment, {comment: comment, key: comment.id})
+            });
+        }
+        return React.createElement("div", {className: "comment"}, 
+            this.props.comment.by, " -- ", this.props.comment.time, 
+            React.createElement("div", {className: "text", dangerouslySetInnerHTML: {__html: this.props.comment.text}}), 
+            comments
+        );
     }
+
 });
 
-module.exports = Comments;
+module.exports = Comment;
 
 },{"react":217}],3:[function(require,module,exports){
 var React = require('react'),
     sentiment = require('sentiment'),
     api = require('../libs/api.js'),
     StorySummary = require('../components/story_summary.js'),
-    Comments = require('../components/comments.js');
+    Comment = require('../components/comment.js');
 
 var Story = React.createClass({displayName: "Story",
 
@@ -75,7 +87,7 @@ var Story = React.createClass({displayName: "Story",
                         };
                     });
                 }
-            }.bind(this))
+            }.bind(this));
 
         }.bind(this));
     },
@@ -90,8 +102,11 @@ var Story = React.createClass({displayName: "Story",
         var content = "Loading...";
         var comments;
         if (this.state.story !== null) {
-            if (! this.state.condensed) {
-                comments = React.createElement(Comments, {story: this.state.story});
+            if (! this.props.condensed && this.state.story.hasOwnProperty("comments")) {
+
+                comments = this.state.story.comments.map(function(comment) {
+                    return React.createElement(Comment, {comment: comment, key: comment.id});
+                });
             }
             content = React.createElement("div", null, 
                 React.createElement(StorySummary, {sentiments: this.state.sentiments, story: this.state.story}), 
@@ -112,7 +127,7 @@ var Story = React.createClass({displayName: "Story",
 
 module.exports = Story;
 
-},{"../components/comments.js":2,"../components/story_summary.js":4,"../libs/api.js":5,"react":217,"sentiment":219}],4:[function(require,module,exports){
+},{"../components/comment.js":2,"../components/story_summary.js":4,"../libs/api.js":5,"react":217,"sentiment":219}],4:[function(require,module,exports){
 var React = require('react'),
     router = require('react-router'),
     Link = router.Link,
