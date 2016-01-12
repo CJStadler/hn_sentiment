@@ -67,4 +67,8 @@ var erf = function(x) {
     return sign * y; // erf(-x) = -erf(x);
 };
 
-module.exports = {normalized_mean: normalized_mean, neutral_score: normalize(weight_by_comments(0, 200))};
+module.exports = {
+    normalized_mean: normalized_mean,
+    normalize: normalize,
+    neutral_score: normalize(weight_by_comments(0, 200))
+};
