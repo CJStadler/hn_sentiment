@@ -2,7 +2,8 @@ var React = require('react'),
     sentiment = require('sentiment'),
     api = require('../libs/api.js'),
     StorySummary = require('../components/story_summary.js'),
-    Comment = require('../components/comment.js');
+    Comment = require('../components/comment.js'),
+    Histogram = require('../components/histogram.js');
 
 var Story = React.createClass({displayName: "Story",
 
@@ -53,6 +54,7 @@ var Story = React.createClass({displayName: "Story",
             }
             content = React.createElement("div", null, 
                 React.createElement(StorySummary, {sentiments: this.state.sentiments, story: this.state.story}), 
+                React.createElement(Histogram, {id: this.state.story.id, values: this.state.sentiments}), 
                 comments
             );
         }
