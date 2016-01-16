@@ -1,10 +1,15 @@
+svg {
+    font: 12px sans-serif;
+}
+
 .bar rect {
-  fill: steelblue;
   shape-rendering: crispEdges;
+  stroke: grey;
+  stroke-width: 1;
 }
 
 .bar text {
-  fill: #fff;
+  fill: black;
 }
 
 .axis path, .axis line {
