@@ -9,7 +9,7 @@ var Histogram = React.createClass({
     },
 
     componentDidUpdate: function() {
-        this.state.chart.render(this.props.values);
+        this.state.chart.render(this.props.values, this.props.click_callback);
     },
 
     chart_id: function() {

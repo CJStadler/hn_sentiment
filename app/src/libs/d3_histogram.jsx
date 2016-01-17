@@ -33,7 +33,7 @@ var new_chart = function(container_id, sentiments) {
         .attr("transform", "translate(0," + height + ")")
         .call(xAxis);
 
-    var render = function(sentiments) {
+    var render = function(sentiments, click_callback) {
         // Generate a histogram using twenty uniformly-spaced bins.
         // if (sentiments.length > 0) {
         //     debugger;
@@ -80,7 +80,8 @@ var new_chart = function(container_id, sentiments) {
                 .attr("height", function(d) { return height - y(d.y); })
                 .attr("fill", function(d) {
                     return color_scale(stats.normalize(d.x + (d.dx/2)));
-                });
+                }).
+                on("click", click_callback);
 
         enter.append("text")
                 .attr("dy", ".75em")

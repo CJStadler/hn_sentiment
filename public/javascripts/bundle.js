@@ -63,17 +63,29 @@ var React = require('react'),
 var Comment = React.createClass({displayName: "Comment",
 
     render: function() {
-        var normalized_sentiment = stats.normalize(this.props.comment.sentiment);
-        var comments;
+        var normalized_sentiment,
+            comments,
+            comment;
+
+        normalized_sentiment = stats.normalize(this.props.comment.sentiment);
+
         if (this.props.comment.hasOwnProperty("comments")) {
             comments = this.props.comment.comments.map(function(comment) {
-                return React.createElement(Comment, {comment: comment, key: comment.id})
-            });
+                return React.createElement(Comment, {comment: comment, key: comment.id, range: this.props.range})
+            }.bind(this));
         }
+
+        if (this.props.comment.sentiment >= this.props.range.min &&
+            this.props.comment.sentiment < this.props.range.max) {
+            comment = React.createElement("div", null, 
+                React.createElement(ColorPatch, {score: normalized_sentiment}), 
+                this.props.comment.by, " -- ", this.props.comment.time.toString(), ":", 
+                React.createElement("div", {className: "text", dangerouslySetInnerHTML: {__html: this.props.comment.text}})
+            )
+        }
+
         return React.createElement("div", {className: "comment", style: comment_styles}, 
-            React.createElement(ColorPatch, {score: normalized_sentiment}), 
-            this.props.comment.by, " -- ", this.props.comment.time.toString(), ":", 
-            React.createElement("div", {className: "text", dangerouslySetInnerHTML: {__html: this.props.comment.text}}), 
+            comment, 
             comments
         );
     }
@@ -98,7 +110,7 @@ var Histogram = React.createClass({displayName: "Histogram",
     },
 
     componentDidUpdate: function() {
-        this.state.chart.render(this.props.values);
+        this.state.chart.render(this.props.values, this.props.click_callback);
     },
 
     chart_id: function() {
@@ -125,13 +137,14 @@ var React = require('react'),
 var Story = React.createClass({displayName: "Story",
 
     getInitialState: function() {
-        return {story: null, sentiments: [], refs: []};
+        return {story: null, sentiments: [], refs: [], range: {min: -100, max: 100}};
     },
 
     componentWillMount: function() {
 
         // get story
         api.item(this.props.id, this.refCollector, function(story) {
+            story.sentiment = 0;
             this.setState({story: story});
 
             // nest all comments within the story, and collect the sentiments
@@ -165,19 +178,33 @@ var Story = React.createClass({displayName: "Story",
         if (this.state.story !== null) {
             if (! this.props.condensed && this.state.story.hasOwnProperty("comments")) {
 
-                comments = this.state.story.comments.map(function(comment) {
-                    return React.createElement(Comment, {comment: comment, key: comment.id});
-                });
+                // comments = this.state.story.comments.map(function(comment) {
+                //     return <Comment comment={comment} key={comment.id}/>;
+                // });
+                comments = React.createElement(Comment, {comment: this.state.story, key: this.state.story.id, range: this.state.range});
             }
             content = React.createElement("div", null, 
                 React.createElement(StorySummary, {sentiments: this.state.sentiments, story: this.state.story}), 
-                React.createElement(Histogram, {id: this.state.story.id, values: this.state.sentiments}), 
+                React.createElement(Histogram, {id: this.state.story.id, 
+                    values: this.state.sentiments, 
+                    click_callback: this.toggle_sentiment_range}), 
                 comments
             );
         }
         return React.createElement("div", null, 
             content
         );
+    },
+
+    toggle_sentiment_range: function(d) {
+        var min = d.x;
+        var max = d.x + d.dx;
+        if (min === -0.5) {
+            min = -100;
+        } else if (max === 0.5) {
+            max = 100;
+        }
+        this.setState({range: {min: min, max: max}});
     },
 
     refCollector: function(ref) {
@@ -322,7 +349,7 @@ var new_chart = function(container_id, sentiments) {
         .attr("transform", "translate(0," + height + ")")
         .call(xAxis);
 
-    var render = function(sentiments) {
+    var render = function(sentiments, click_callback) {
         // Generate a histogram using twenty uniformly-spaced bins.
         // if (sentiments.length > 0) {
         //     debugger;
@@ -369,7 +396,8 @@ var new_chart = function(container_id, sentiments) {
                 .attr("height", function(d) { return height - y(d.y); })
                 .attr("fill", function(d) {
                     return color_scale(stats.normalize(d.x + (d.dx/2)));
-                });
+                }).
+                on("click", click_callback);
 
         enter.append("text")
                 .attr("dy", ".75em")

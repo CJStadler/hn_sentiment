@@ -5,17 +5,29 @@ var React = require('react'),
 var Comment = React.createClass({displayName: "Comment",
 
     render: function() {
-        var normalized_sentiment = stats.normalize(this.props.comment.sentiment);
-        var comments;
+        var normalized_sentiment,
+            comments,
+            comment;
+
+        normalized_sentiment = stats.normalize(this.props.comment.sentiment);
+
         if (this.props.comment.hasOwnProperty("comments")) {
             comments = this.props.comment.comments.map(function(comment) {
-                return React.createElement(Comment, {comment: comment, key: comment.id})
-            });
+                return React.createElement(Comment, {comment: comment, key: comment.id, range: this.props.range})
+            }.bind(this));
         }
+
+        if (this.props.comment.sentiment >= this.props.range.min &&
+            this.props.comment.sentiment < this.props.range.max) {
+            comment = React.createElement("div", null, 
+                React.createElement(ColorPatch, {score: normalized_sentiment}), 
+                this.props.comment.by, " -- ", this.props.comment.time.toString(), ":", 
+                React.createElement("div", {className: "text", dangerouslySetInnerHTML: {__html: this.props.comment.text}})
+            )
+        }
+
         return React.createElement("div", {className: "comment", style: comment_styles}, 
-            React.createElement(ColorPatch, {score: normalized_sentiment}), 
-            this.props.comment.by, " -- ", this.props.comment.time.toString(), ":", 
-            React.createElement("div", {className: "text", dangerouslySetInnerHTML: {__html: this.props.comment.text}}), 
+            comment, 
             comments
         );
     }

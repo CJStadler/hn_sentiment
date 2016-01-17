@@ -8,13 +8,14 @@ var React = require('react'),
 var Story = React.createClass({
 
     getInitialState: function() {
-        return {story: null, sentiments: [], refs: []};
+        return {story: null, sentiments: [], refs: [], range: {min: -100, max: 100}};
     },
 
     componentWillMount: function() {
 
         // get story
         api.item(this.props.id, this.refCollector, function(story) {
+            story.sentiment = 0;
             this.setState({story: story});
 
             // nest all comments within the story, and collect the sentiments
@@ -48,19 +49,33 @@ var Story = React.createClass({
         if (this.state.story !== null) {
             if (! this.props.condensed && this.state.story.hasOwnProperty("comments")) {
 
-                comments = this.state.story.comments.map(function(comment) {
-                    return <Comment comment={comment} key={comment.id}/>;
-                });
+                // comments = this.state.story.comments.map(function(comment) {
+                //     return <Comment comment={comment} key={comment.id}/>;
+                // });
+                comments = <Comment comment={this.state.story} key={this.state.story.id} range={this.state.range}/>;
             }
             content = <div>
                 <StorySummary sentiments={this.state.sentiments} story={this.state.story} />
-                <Histogram id={this.state.story.id} values={this.state.sentiments} />
+                <Histogram id={this.state.story.id}
+                    values={this.state.sentiments}
+                    click_callback={this.toggle_sentiment_range} />
                 {comments}
             </div>;
         }
         return <div>
             {content}
         </div>;
+    },
+
+    toggle_sentiment_range: function(d) {
+        var min = d.x;
+        var max = d.x + d.dx;
+        if (min === -0.5) {
+            min = -100;
+        } else if (max === 0.5) {
+            max = 100;
+        }
+        this.setState({range: {min: min, max: max}});
     },
 
     refCollector: function(ref) {
