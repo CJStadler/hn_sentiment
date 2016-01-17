@@ -70,11 +70,20 @@ var Story = React.createClass({displayName: "Story",
     toggle_sentiment_range: function(d) {
         var min = d.x;
         var max = d.x + d.dx;
+
+        // limits at upper and lower bounds should be wider
         if (min === -0.5) {
             min = -100;
         } else if (max === 0.5) {
             max = 100;
         }
+
+        // if it's the same as current, then toggle the range off
+        if (min === this.state.range.min && max === this.state.range.max) {
+            min = -100;
+            max = 100;
+        }
+
         this.setState({range: {min: min, max: max}});
     },
 
