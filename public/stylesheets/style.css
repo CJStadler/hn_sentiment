@@ -17,3 +17,11 @@ svg {
   stroke: #000;
   shape-rendering: crispEdges;
 }
+
+.pagination a, .pagination span {
+    margin-right: 8px;
+}
+
+.pagination a:visited {
+    color:blue;
+}

@@ -15,15 +15,15 @@ var App = React.createClass({
         return <div>
             <div><IndexLink to="/">Index</IndexLink></div>
             {this.props.children}
-        </div>
+        </div>;
     }
 });
 
 ReactDOM.render((
     <Router history={browserHistory}>
-        <Route path="/" component={App}>
+        <Route path="/(:page)" component={App}>
             <IndexRoute component={Index} />
-            <Route path="story/:id" component={StoryPage} />
+            <Route path="/story/:id" component={StoryPage} />
         </Route>
     </Router>
 ), document.getElementById('app'));
