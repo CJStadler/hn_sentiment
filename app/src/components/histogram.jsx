@@ -17,7 +17,7 @@ var Histogram = React.createClass({
     },
 
     render: function() {
-        return <div id={this.chart_id()}>
+        return <div className="histogram" id={this.chart_id()}>
         </div>;
     }
 

@@ -11,6 +11,8 @@ var ColorPatch = React.createClass({displayName: "ColorPatch",
             display: "inline-block",
             height: "1em",
             width: "1em",
+            margin: "0 0.5em",
+            verticalAlign: "bottom",
             backgroundColor: color
         };
 

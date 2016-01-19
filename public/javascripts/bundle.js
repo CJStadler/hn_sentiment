@@ -45,6 +45,8 @@ var ColorPatch = React.createClass({displayName: "ColorPatch",
             display: "inline-block",
             height: "1em",
             width: "1em",
+            margin: "0 0.5em",
+            verticalAlign: "bottom",
             backgroundColor: color
         };
 
@@ -79,7 +81,10 @@ var Comment = React.createClass({displayName: "Comment",
             this.props.comment.sentiment < this.props.range.max) {
             comment = React.createElement("div", null, 
                 React.createElement(ColorPatch, {score: normalized_sentiment}), 
-                this.props.comment.by, " -- ", this.props.comment.time.toString(), ":", 
+                React.createElement("a", {href: "https://news.ycombinator.com/user?id=" + this.props.comment.by}, 
+                    this.props.comment.by
+                ), 
+                " — ", this.props.comment.time.toString(), ":", 
                 React.createElement("div", {className: "text", dangerouslySetInnerHTML: {__html: this.props.comment.text}})
             )
         }
@@ -118,7 +123,7 @@ var Histogram = React.createClass({displayName: "Histogram",
     },
 
     render: function() {
-        return React.createElement("div", {id: this.chart_id()}
+        return React.createElement("div", {className: "histogram", id: this.chart_id()}
         );
     }
 
@@ -240,7 +245,7 @@ var Story = React.createClass({displayName: "Story",
                 comments
             );
         }
-        return React.createElement("div", null, 
+        return React.createElement("div", {className: "story"}, 
             content
         );
     },
@@ -287,15 +292,22 @@ var StorySummary = React.createClass({displayName: "StorySummary",
 
     render: function() {
         var normalized_mean = stats.normalized_mean(this.props.sentiments);
-
+        var story = this.props.story
         // return <div>{n_comments},{sum},{mean}</div>;
-        return React.createElement("div", null, 
+        return React.createElement("div", {className: "story-summary"}, 
             React.createElement("div", null, 
-                React.createElement("h2", null, React.createElement("a", {href: this.props.story.url}, this.props.story.title))
+                React.createElement("h2", {className: "story-title"}, React.createElement("a", {href: story.url}, story.title))
             ), 
-            React.createElement(Link, {to: "/story/" + this.props.story.id}, 
-                this.props.story.descendants, " comments", 
-                React.createElement(ColorPatch, {score: normalized_mean})
+            React.createElement("div", {className: "subtext"}, 
+                story.score, " points |" + ' ' +
+                "by ", React.createElement("a", {href: "https://news.ycombinator.com/user?id=" + story.by}, 
+                    story.by
+                ), 
+                " | ", 
+                React.createElement(Link, {to: "/story/" + story.id}, 
+                    story.descendants, " comments", 
+                    React.createElement(ColorPatch, {score: normalized_mean})
+                )
             )
         );
     }
@@ -380,9 +392,9 @@ var d3 = require('d3'),
 // A formatter for counts.
 // var formatCount = d3.format(",.0f");
 
-var margin = {top: 20, right: 30, bottom: 30, left: 30},
+var margin = {top: 20, right: 10, bottom: 20, left: 10},
     width = 600 - margin.left - margin.right,
-    height = 200 - margin.top - margin.bottom;
+    height = 100 - margin.top - margin.bottom;
 
 var x = d3.scale.linear()
     .domain([-0.5, 0.5])
@@ -446,7 +458,8 @@ var new_chart = function(container_id, sentiments) {
                 .attr("class", "bar")
                 .attr("transform", function(d) {
                     return "translate(" + x(d.x) + "," + y(d.y) + ")";
-                });
+                })
+                .on("click", click_callback);
 
         enter.append("rect")
                 .attr("x", 1)
@@ -454,8 +467,7 @@ var new_chart = function(container_id, sentiments) {
                 .attr("height", function(d) { return height - y(d.y); })
                 .attr("fill", function(d) {
                     return color_scale(stats.normalize(d.x + (d.dx/2)));
-                }).
-                on("click", click_callback);
+                });
 
         enter.append("text")
                 .attr("dy", ".75em")

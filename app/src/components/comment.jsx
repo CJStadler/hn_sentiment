@@ -21,7 +21,10 @@ var Comment = React.createClass({
             this.props.comment.sentiment < this.props.range.max) {
             comment = <div>
                 <ColorPatch score={normalized_sentiment} />
-                {this.props.comment.by} -- {this.props.comment.time.toString()}:
+                <a href={"https://news.ycombinator.com/user?id=" + this.props.comment.by}>
+                    {this.props.comment.by}
+                </a>
+                &nbsp;&mdash; {this.props.comment.time.toString()}:
                 <div className="text" dangerouslySetInnerHTML={{__html: this.props.comment.text}} />
             </div>
         }

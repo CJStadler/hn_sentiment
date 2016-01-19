@@ -62,7 +62,7 @@ var Story = React.createClass({
                 {comments}
             </div>;
         }
-        return <div>
+        return <div className="story">
             {content}
         </div>;
     },

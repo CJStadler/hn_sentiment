@@ -62,7 +62,7 @@ var Story = React.createClass({displayName: "Story",
                 comments
             );
         }
-        return React.createElement("div", null, 
+        return React.createElement("div", {className: "story"}, 
             content
         );
     },

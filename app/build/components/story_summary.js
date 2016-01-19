@@ -10,15 +10,22 @@ var StorySummary = React.createClass({displayName: "StorySummary",
 
     render: function() {
         var normalized_mean = stats.normalized_mean(this.props.sentiments);
-
+        var story = this.props.story
         // return <div>{n_comments},{sum},{mean}</div>;
-        return React.createElement("div", null, 
+        return React.createElement("div", {className: "story-summary"}, 
             React.createElement("div", null, 
-                React.createElement("h2", null, React.createElement("a", {href: this.props.story.url}, this.props.story.title))
+                React.createElement("h2", {className: "story-title"}, React.createElement("a", {href: story.url}, story.title))
             ), 
-            React.createElement(Link, {to: "/story/" + this.props.story.id}, 
-                this.props.story.descendants, " comments", 
-                React.createElement(ColorPatch, {score: normalized_mean})
+            React.createElement("div", {className: "subtext"}, 
+                story.score, " points |" + ' ' +
+                "by ", React.createElement("a", {href: "https://news.ycombinator.com/user?id=" + story.by}, 
+                    story.by
+                ), 
+                " | ", 
+                React.createElement(Link, {to: "/story/" + story.id}, 
+                    story.descendants, " comments", 
+                    React.createElement(ColorPatch, {score: normalized_mean})
+                )
             )
         );
     }

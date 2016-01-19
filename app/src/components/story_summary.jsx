@@ -10,16 +10,23 @@ var StorySummary = React.createClass({
 
     render: function() {
         var normalized_mean = stats.normalized_mean(this.props.sentiments);
-
+        var story = this.props.story
         // return <div>{n_comments},{sum},{mean}</div>;
-        return <div>
+        return <div className="story-summary">
             <div>
-                <h2><a href={this.props.story.url}>{this.props.story.title}</a></h2>
+                <h2 className="story-title"><a href={story.url}>{story.title}</a></h2>
             </div>
-            <Link to={"/story/" + this.props.story.id}>
-                {this.props.story.descendants} comments
-                <ColorPatch score={normalized_mean} />
-            </Link>
+            <div className="subtext">
+                {story.score} points |
+                by <a href={"https://news.ycombinator.com/user?id=" + story.by}>
+                    {story.by}
+                </a>
+                &nbsp;|&nbsp;
+                <Link to={"/story/" + story.id}>
+                    {story.descendants} comments
+                    <ColorPatch score={normalized_mean} />
+                </Link>
+            </div>
         </div>;
     }
 });

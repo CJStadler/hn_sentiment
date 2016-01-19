@@ -21,7 +21,10 @@ var Comment = React.createClass({displayName: "Comment",
             this.props.comment.sentiment < this.props.range.max) {
             comment = React.createElement("div", null, 
                 React.createElement(ColorPatch, {score: normalized_sentiment}), 
-                this.props.comment.by, " -- ", this.props.comment.time.toString(), ":", 
+                React.createElement("a", {href: "https://news.ycombinator.com/user?id=" + this.props.comment.by}, 
+                    this.props.comment.by
+                ), 
+                " — ", this.props.comment.time.toString(), ":", 
                 React.createElement("div", {className: "text", dangerouslySetInnerHTML: {__html: this.props.comment.text}})
             )
         }
