@@ -515,12 +515,12 @@ var React = require('react'),
 var Index = React.createClass({displayName: "Index",
 
     getInitialState: function() {
-        return {story_ids: [], ref: null};
+        return {story_ids: [], ref: null, page: 0};
     },
 
     componentWillMount: function() {
 
-        api.topstories(10, function(ref) {
+        api.topstories(50, function(ref) {
             this.setState({ref: ref});
         }.bind(this), function(id) {
             var ids = this.state.story_ids.slice();
@@ -535,11 +535,13 @@ var Index = React.createClass({displayName: "Index",
     },
 
     render: function() {
-        var stories;
+        var stories, offset;
         if (this.state.story_ids.length === 0) {
             stories = "Loading...";
         } else {
-            stories = this.state.story_ids.map(function(id) {
+            offset = this.state.page * 10;
+            stories = this.state.story_ids.slice(offset, offset + 10);
+            stories = stories.map(function(id) {
                 return React.createElement(Story, {condensed: true, id: id, key: id});
             })
         }
