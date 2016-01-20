@@ -52,7 +52,10 @@ var Story = React.createClass({displayName: "Story",
                 // comments = this.state.story.comments.map(function(comment) {
                 //     return <Comment comment={comment} key={comment.id}/>;
                 // });
-                comments = React.createElement(Comment, {comment: this.state.story, key: this.state.story.id, range: this.state.range});
+                comments = React.createElement(Comment, {
+                    comment: this.state.story, 
+                    key: this.state.story.id, 
+                    range: this.state.range});
             }
             content = React.createElement("div", null, 
                 React.createElement(StorySummary, {sentiments: this.state.sentiments, story: this.state.story}), 

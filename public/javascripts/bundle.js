@@ -64,13 +64,20 @@ var React = require('react'),
 
 var Comment = React.createClass({displayName: "Comment",
 
+    getDefaultProps: function() {
+        return {closed: null};
+    },
+    
     getInitialState: function() {
-        return {opened: false};
+        return {closed: null}; // whether to show the comment will be then depend on the sentiment range
     },
 
     componentWillReceiveProps: function(new_props) {
-        if (new_props.range.min !== this.props.range.min || new_props.range.max !== this.props.range.max) {
-            this.setState({opened: false});
+        // when the filter changes, reset state
+        if (new_props.range.min !== this.props.range.min ||
+            new_props.range.max !== this.props.range.max ||
+            new_props.closed !== this.props.closed) {
+            this.setState({closed: null});
         }
     },
 
@@ -78,33 +85,49 @@ var Comment = React.createClass({displayName: "Comment",
         var normalized_sentiment,
             comments,
             comment,
-            range;
+            children_closed;
+
+        var closed = this.state.closed;
+
+        if (closed === null) {
+            closed = this.props.closed;
+            if (closed === null) {
+                closed = this.props.comment.deleted || (
+                    this.props.comment.sentiment < this.props.range.min ||
+                    this.props.comment.sentiment >= this.props.range.max
+                );
+            }
+        }
+
+        if (this.state.closed === null) {
+            children_closed = this.props.closed;
+        } else {
+            children_closed = this.state.closed;
+        }
 
         normalized_sentiment = stats.normalize(this.props.comment.sentiment);
 
         if (this.props.comment.hasOwnProperty("comments")) {
-            if (this.state.opened) { // All child comments should also be open
-                range = {min: -100, max: 100};
-            } else {
-                range = this.props.range;
-            }
             comments = this.props.comment.comments.map(function(comment) {
-                return React.createElement(Comment, {comment: comment, key: comment.id, range: range})
+                return React.createElement(Comment, {
+                    comment: comment, 
+                    key: comment.id, 
+                    range: this.props.range, 
+                    closed: children_closed});
             }.bind(this));
         }
 
-        if (this.state.opened || (this.props.comment.sentiment >= this.props.range.min &&
-            this.props.comment.sentiment < this.props.range.max)) {
+        if (closed) {
+            comment = React.createElement("div", {onClick: this.open, className: "closed"}, "+");
+        } else {
             comment = React.createElement("div", {className: "open"}, 
-                React.createElement(ColorPatch, {score: normalized_sentiment}), 
+                React.createElement("span", {onClick: this.close}, React.createElement(ColorPatch, {score: normalized_sentiment})), 
                 React.createElement("a", {href: "https://news.ycombinator.com/user?id=" + this.props.comment.by}, 
                     this.props.comment.by
                 ), 
                 " — ", this.props.comment.time.toString(), ":", 
                 React.createElement("div", {className: "text", dangerouslySetInnerHTML: {__html: this.props.comment.text}})
             )
-        } else {
-            comment = React.createElement("div", {onClick: this.open, className: "closed"}, "+");
         }
 
         return React.createElement("div", {className: "comment"}, 
@@ -114,7 +137,11 @@ var Comment = React.createClass({displayName: "Comment",
     },
 
     open: function() {
-        this.setState({opened: true});
+        this.setState({closed: false});
+    },
+
+    close: function() {
+        this.setState({closed: true});
     }
 
 });
@@ -253,7 +280,10 @@ var Story = React.createClass({displayName: "Story",
                 // comments = this.state.story.comments.map(function(comment) {
                 //     return <Comment comment={comment} key={comment.id}/>;
                 // });
-                comments = React.createElement(Comment, {comment: this.state.story, key: this.state.story.id, range: this.state.range});
+                comments = React.createElement(Comment, {
+                    comment: this.state.story, 
+                    key: this.state.story.id, 
+                    range: this.state.range});
             }
             content = React.createElement("div", null, 
                 React.createElement(StorySummary, {sentiments: this.state.sentiments, story: this.state.story}), 

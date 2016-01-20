@@ -52,7 +52,10 @@ var Story = React.createClass({
                 // comments = this.state.story.comments.map(function(comment) {
                 //     return <Comment comment={comment} key={comment.id}/>;
                 // });
-                comments = <Comment comment={this.state.story} key={this.state.story.id} range={this.state.range}/>;
+                comments = <Comment
+                    comment={this.state.story}
+                    key={this.state.story.id}
+                    range={this.state.range} />;
             }
             content = <div>
                 <StorySummary sentiments={this.state.sentiments} story={this.state.story} />

@@ -4,13 +4,20 @@ var React = require('react'),
 
 var Comment = React.createClass({
 
+    getDefaultProps: function() {
+        return {closed: null};
+    },
+    
     getInitialState: function() {
-        return {opened: false};
+        return {closed: null}; // whether to show the comment will be then depend on the sentiment range
     },
 
     componentWillReceiveProps: function(new_props) {
-        if (new_props.range.min !== this.props.range.min || new_props.range.max !== this.props.range.max) {
-            this.setState({opened: false});
+        // when the filter changes, reset state
+        if (new_props.range.min !== this.props.range.min ||
+            new_props.range.max !== this.props.range.max ||
+            new_props.closed !== this.props.closed) {
+            this.setState({closed: null});
         }
     },
 
@@ -18,33 +25,49 @@ var Comment = React.createClass({
         var normalized_sentiment,
             comments,
             comment,
-            range;
+            children_closed;
+
+        var closed = this.state.closed;
+
+        if (closed === null) {
+            closed = this.props.closed;
+            if (closed === null) {
+                closed = this.props.comment.deleted || (
+                    this.props.comment.sentiment < this.props.range.min ||
+                    this.props.comment.sentiment >= this.props.range.max
+                );
+            }
+        }
+
+        if (this.state.closed === null) {
+            children_closed = this.props.closed;
+        } else {
+            children_closed = this.state.closed;
+        }
 
         normalized_sentiment = stats.normalize(this.props.comment.sentiment);
 
         if (this.props.comment.hasOwnProperty("comments")) {
-            if (this.state.opened) { // All child comments should also be open
-                range = {min: -100, max: 100};
-            } else {
-                range = this.props.range;
-            }
             comments = this.props.comment.comments.map(function(comment) {
-                return <Comment comment={comment} key={comment.id} range={range}/>
+                return <Comment
+                    comment={comment}
+                    key={comment.id}
+                    range={this.props.range}
+                    closed={children_closed} />;
             }.bind(this));
         }
 
-        if (this.state.opened || (this.props.comment.sentiment >= this.props.range.min &&
-            this.props.comment.sentiment < this.props.range.max)) {
+        if (closed) {
+            comment = <div onClick={this.open} className="closed">+</div>;
+        } else {
             comment = <div className="open">
-                <ColorPatch score={normalized_sentiment} />
+                <span onClick={this.close}><ColorPatch score={normalized_sentiment} /></span>
                 <a href={"https://news.ycombinator.com/user?id=" + this.props.comment.by}>
                     {this.props.comment.by}
                 </a>
                 &nbsp;&mdash; {this.props.comment.time.toString()}:
                 <div className="text" dangerouslySetInnerHTML={{__html: this.props.comment.text}} />
             </div>
-        } else {
-            comment = <div onClick={this.open} className="closed">+</div>;
         }
 
         return <div className="comment">
@@ -54,7 +77,11 @@ var Comment = React.createClass({
     },
 
     open: function() {
-        this.setState({opened: true});
+        this.setState({closed: false});
+    },
+
+    close: function() {
+        this.setState({closed: true});
     }
 
 });
