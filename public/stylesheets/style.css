@@ -23,6 +23,26 @@ body {
     margin: 0 0 0 1em;
 }
 
+/* Comments */
+.comment {
+    margin: 0 0 0 1em;
+    border-left: 1px solid grey;
+}
+
+.comment .open {
+    margin: 0.5em 0;
+}
+
+.comment .closed {
+    font-size: 0.8em;
+    margin: 4px 0;
+}
+
+.comment .text {
+    margin-top: 0.5em;
+    padding-left: 1em;
+}
+
 /* Pagination */
 .pagination {
     margin: 0.5em 0;
