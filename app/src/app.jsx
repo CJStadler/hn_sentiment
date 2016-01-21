@@ -4,11 +4,10 @@ var React = require('react'),
     Router = router.Router,
     Route = router.Route,
     IndexRoute = router.IndexRoute,
-    browserHistory = router.browserHistory,
     IndexLink = router.IndexLink,
+    browserHistory = require('history/lib/createBrowserHistory')(), // change this using react-router 2.0
     Index = require('./pages/index.js'),
     StoryPage = require('./pages/story_page.js');
-
 
 var App = React.createClass({
     render: function() {
