@@ -7,7 +7,7 @@ var Comment = React.createClass({displayName: "Comment",
     getDefaultProps: function() {
         return {closed: null};
     },
-    
+
     getInitialState: function() {
         return {closed: null}; // whether to show the comment will be then depend on the sentiment range
     },
@@ -61,7 +61,7 @@ var Comment = React.createClass({displayName: "Comment",
             comment = React.createElement("div", {onClick: this.open, className: "closed"}, "+");
         } else {
             comment = React.createElement("div", {className: "open"}, 
-                React.createElement("span", {onClick: this.close}, React.createElement(ColorPatch, {score: normalized_sentiment})), 
+                React.createElement("span", {className: "close-comment", onClick: this.close}, React.createElement(ColorPatch, {score: normalized_sentiment})), 
                 React.createElement("a", {href: "https://news.ycombinator.com/user?id=" + this.props.comment.by}, 
                     this.props.comment.by
                 ), 

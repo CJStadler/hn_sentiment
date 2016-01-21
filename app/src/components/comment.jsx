@@ -7,7 +7,7 @@ var Comment = React.createClass({
     getDefaultProps: function() {
         return {closed: null};
     },
-    
+
     getInitialState: function() {
         return {closed: null}; // whether to show the comment will be then depend on the sentiment range
     },
@@ -61,7 +61,7 @@ var Comment = React.createClass({
             comment = <div onClick={this.open} className="closed">+</div>;
         } else {
             comment = <div className="open">
-                <span onClick={this.close}><ColorPatch score={normalized_sentiment} /></span>
+                <span className="close-comment" onClick={this.close}><ColorPatch score={normalized_sentiment} /></span>
                 <a href={"https://news.ycombinator.com/user?id=" + this.props.comment.by}>
                     {this.props.comment.by}
                 </a>

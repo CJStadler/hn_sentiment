@@ -9,3 +9,9 @@ A color label for each story is produced by taking the mean of the sentiment of 
 Each comment is labeled using the same method, but the histogram shows the raw scores.
 
 Uses node.js, React, D3.js, and the [sentiment](https://github.com/thisandagain/sentiment) module.
+
+## TODO:
+
+- Fix timestamps
+- Check distribution of comments
+- Performance
