@@ -10,11 +10,16 @@ var StorySummary = React.createClass({
 
     render: function() {
         var normalized_mean = stats.normalized_mean(this.props.sentiments);
-        var story = this.props.story
-        // return <div>{n_comments},{sum},{mean}</div>;
+        var story = this.props.story;
+        var index = this.props.index;
+
+        if (typeof index !== "undefined") {
+            index = <span className="story-index">{index}. </span>
+        }
+
         return <div className="story-summary">
             <div>
-                <h2 className="story-title"><a href={story.url}>{story.title}</a></h2>
+                <h2 className="story-title">{index}<a href={story.url}>{story.title}</a></h2>
             </div>
             <div className="subtext">
                 {story.score} points |

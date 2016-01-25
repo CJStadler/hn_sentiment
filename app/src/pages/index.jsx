@@ -28,10 +28,10 @@ var Index = React.createClass({
     },
 
     current_page: function() {
-        if (typeof this.props.params.page === 'undefined') {
+        if (typeof this.props.location.query.page === 'undefined') {
             return 0;
         } else {
-            return parseInt(this.props.params.page);
+            return parseInt(this.props.location.query.page);
         }
     },
 
@@ -45,8 +45,8 @@ var Index = React.createClass({
         } else {
             offset = page * per_page;
             stories = this.state.story_ids.slice(offset, offset + per_page);
-            stories = stories.map(function(id) {
-                return <Story condensed={true} id={id} key={id}/>;
+            stories = stories.map(function(id, i) {
+                return <Story index={offset + i + 1} condensed={true} id={id} key={id}/>;
             });
         }
 

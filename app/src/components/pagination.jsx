@@ -14,7 +14,7 @@ var Pagination = React.createClass({
 
     previous_link: function() {
         if (this.props.current > 0) {
-            return <IndexLink to={"/" + (this.props.current - 1)}>Previous</IndexLink>;
+            return <IndexLink to={"/?page=" + (this.props.current - 1)}>Previous</IndexLink>;
         } else {
             return <span>Previous</span>;
         }
@@ -23,7 +23,7 @@ var Pagination = React.createClass({
 
     next_link: function() {
         if (this.props.current < this.props.last) {
-            return <IndexLink to={"/" + (this.props.current + 1)}>Next</IndexLink>;
+            return <IndexLink to={"/?page=" + (this.props.current + 1)}>Next</IndexLink>;
         } else {
             return <span>Next</span>;
         }
@@ -35,7 +35,7 @@ var Pagination = React.createClass({
 
         return a.map(function(x,i) {
             if (i !== this.props.current) {
-                return <IndexLink to={"/" + i} key={i}>{i}</IndexLink>;
+                return <IndexLink to="/" query={{ page: i}} key={i}>{i}</IndexLink>;
             } else {
                 return <span key={i}>{i}</span>;
             }

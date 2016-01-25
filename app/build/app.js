@@ -5,7 +5,7 @@ var React = require('react'),
     Route = router.Route,
     IndexRoute = router.IndexRoute,
     IndexLink = router.IndexLink,
-    browserHistory = require('history/lib/createBrowserHistory')(), // change this using react-router 2.0
+    browserHistory = require('history/lib/createBrowserHistory')(), // change this if using react-router 2.0
     Index = require('./pages/index.js'),
     StoryPage = require('./pages/story_page.js');
 
@@ -20,7 +20,7 @@ var App = React.createClass({displayName: "App",
 
 ReactDOM.render((
     React.createElement(Router, {history: browserHistory}, 
-        React.createElement(Route, {path: "/(:page)", component: App}, 
+        React.createElement(Route, {path: "/", component: App}, 
             React.createElement(IndexRoute, {component: Index}), 
             React.createElement(Route, {path: "/story/:id", component: StoryPage})
         )

@@ -58,7 +58,7 @@ var Story = React.createClass({displayName: "Story",
                     range: this.state.range});
             }
             content = React.createElement("div", null, 
-                React.createElement(StorySummary, {sentiments: this.state.sentiments, story: this.state.story}), 
+                React.createElement(StorySummary, {index: this.props.index, sentiments: this.state.sentiments, story: this.state.story}), 
                 React.createElement(Histogram, {id: this.state.story.id, 
                     values: this.state.sentiments, 
                     click_callback: this.toggle_sentiment_range}), 

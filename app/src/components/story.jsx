@@ -58,7 +58,7 @@ var Story = React.createClass({
                     range={this.state.range} />;
             }
             content = <div>
-                <StorySummary sentiments={this.state.sentiments} story={this.state.story} />
+                <StorySummary index={this.props.index} sentiments={this.state.sentiments} story={this.state.story} />
                 <Histogram id={this.state.story.id}
                     values={this.state.sentiments}
                     click_callback={this.toggle_sentiment_range} />

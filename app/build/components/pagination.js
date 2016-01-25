@@ -14,7 +14,7 @@ var Pagination = React.createClass({displayName: "Pagination",
 
     previous_link: function() {
         if (this.props.current > 0) {
-            return React.createElement(IndexLink, {to: "/" + (this.props.current - 1)}, "Previous");
+            return React.createElement(IndexLink, {to: "/?page=" + (this.props.current - 1)}, "Previous");
         } else {
             return React.createElement("span", null, "Previous");
         }
@@ -23,7 +23,7 @@ var Pagination = React.createClass({displayName: "Pagination",
 
     next_link: function() {
         if (this.props.current < this.props.last) {
-            return React.createElement(IndexLink, {to: "/" + (this.props.current + 1)}, "Next");
+            return React.createElement(IndexLink, {to: "/?page=" + (this.props.current + 1)}, "Next");
         } else {
             return React.createElement("span", null, "Next");
         }
@@ -35,7 +35,7 @@ var Pagination = React.createClass({displayName: "Pagination",
 
         return a.map(function(x,i) {
             if (i !== this.props.current) {
-                return React.createElement(IndexLink, {to: "/" + i, key: i}, i);
+                return React.createElement(IndexLink, {to: "/", query: { page: i}, key: i}, i);
             } else {
                 return React.createElement("span", {key: i}, i);
             }

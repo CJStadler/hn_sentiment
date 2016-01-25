@@ -6,7 +6,7 @@ var React = require('react'),
     Route = router.Route,
     IndexRoute = router.IndexRoute,
     IndexLink = router.IndexLink,
-    browserHistory = require('history/lib/createBrowserHistory')(), // change this using react-router 2.0
+    browserHistory = require('history/lib/createBrowserHistory')(), // change this if using react-router 2.0
     Index = require('./pages/index.js'),
     StoryPage = require('./pages/story_page.js');
 
@@ -21,7 +21,7 @@ var App = React.createClass({displayName: "App",
 
 ReactDOM.render((
     React.createElement(Router, {history: browserHistory}, 
-        React.createElement(Route, {path: "/(:page)", component: App}, 
+        React.createElement(Route, {path: "/", component: App}, 
             React.createElement(IndexRoute, {component: Index}), 
             React.createElement(Route, {path: "/story/:id", component: StoryPage})
         )
@@ -192,7 +192,7 @@ var Pagination = React.createClass({displayName: "Pagination",
 
     previous_link: function() {
         if (this.props.current > 0) {
-            return React.createElement(IndexLink, {to: "/" + (this.props.current - 1)}, "Previous");
+            return React.createElement(IndexLink, {to: "/?page=" + (this.props.current - 1)}, "Previous");
         } else {
             return React.createElement("span", null, "Previous");
         }
@@ -201,7 +201,7 @@ var Pagination = React.createClass({displayName: "Pagination",
 
     next_link: function() {
         if (this.props.current < this.props.last) {
-            return React.createElement(IndexLink, {to: "/" + (this.props.current + 1)}, "Next");
+            return React.createElement(IndexLink, {to: "/?page=" + (this.props.current + 1)}, "Next");
         } else {
             return React.createElement("span", null, "Next");
         }
@@ -213,7 +213,7 @@ var Pagination = React.createClass({displayName: "Pagination",
 
         return a.map(function(x,i) {
             if (i !== this.props.current) {
-                return React.createElement(IndexLink, {to: "/" + i, key: i}, i);
+                return React.createElement(IndexLink, {to: "/", query: { page: i}, key: i}, i);
             } else {
                 return React.createElement("span", {key: i}, i);
             }
@@ -285,7 +285,7 @@ var Story = React.createClass({displayName: "Story",
                     range: this.state.range});
             }
             content = React.createElement("div", null, 
-                React.createElement(StorySummary, {sentiments: this.state.sentiments, story: this.state.story}), 
+                React.createElement(StorySummary, {index: this.props.index, sentiments: this.state.sentiments, story: this.state.story}), 
                 React.createElement(Histogram, {id: this.state.story.id, 
                     values: this.state.sentiments, 
                     click_callback: this.toggle_sentiment_range}), 
@@ -339,11 +339,16 @@ var StorySummary = React.createClass({displayName: "StorySummary",
 
     render: function() {
         var normalized_mean = stats.normalized_mean(this.props.sentiments);
-        var story = this.props.story
-        // return <div>{n_comments},{sum},{mean}</div>;
+        var story = this.props.story;
+        var index = this.props.index;
+
+        if (typeof index !== "undefined") {
+            index = React.createElement("span", {className: "story-index"}, index, ". ")
+        }
+
         return React.createElement("div", {className: "story-summary"}, 
             React.createElement("div", null, 
-                React.createElement("h2", {className: "story-title"}, React.createElement("a", {href: story.url}, story.title))
+                React.createElement("h2", {className: "story-title"}, index, React.createElement("a", {href: story.url}, story.title))
             ), 
             React.createElement("div", {className: "subtext"}, 
                 story.score, " points |" + ' ' +
@@ -646,10 +651,10 @@ var Index = React.createClass({displayName: "Index",
     },
 
     current_page: function() {
-        if (typeof this.props.params.page === 'undefined') {
+        if (typeof this.props.location.query.page === 'undefined') {
             return 0;
         } else {
-            return parseInt(this.props.params.page);
+            return parseInt(this.props.location.query.page);
         }
     },
 
@@ -663,8 +668,8 @@ var Index = React.createClass({displayName: "Index",
         } else {
             offset = page * per_page;
             stories = this.state.story_ids.slice(offset, offset + per_page);
-            stories = stories.map(function(id) {
-                return React.createElement(Story, {condensed: true, id: id, key: id});
+            stories = stories.map(function(id, i) {
+                return React.createElement(Story, {index: offset + i + 1, condensed: true, id: id, key: id});
             });
         }
 
