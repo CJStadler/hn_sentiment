@@ -3,7 +3,8 @@ var React = require('react'),
     Link = router.Link,
     api = require("../libs/api.js"),
     stats = require("../libs/stats.js"),
-    ColorPatch = require("./color_patch.js");
+    ColorPatch = require("./color_patch.js"),
+    Timestamp = require("./timestamp.js");
 
 
 var StorySummary = React.createClass({
@@ -25,7 +26,7 @@ var StorySummary = React.createClass({
                 {story.score} points |
                 by <a href={"https://news.ycombinator.com/user?id=" + story.by}>
                     {story.by}
-                </a>
+                </a> <Timestamp time={story.time} />
                 &nbsp;|&nbsp;
                 <Link to={"/story/" + story.id}>
                     {story.descendants} comments

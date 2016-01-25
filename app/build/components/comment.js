@@ -1,6 +1,7 @@
 var React = require('react'),
     stats = require("../libs/stats.js"),
-    ColorPatch = require("./color_patch.js");
+    ColorPatch = require("./color_patch.js"),
+    Timestamp = require("./timestamp.js");
 
 var Comment = React.createClass({displayName: "Comment",
 
@@ -65,7 +66,7 @@ var Comment = React.createClass({displayName: "Comment",
                 React.createElement("a", {href: "https://news.ycombinator.com/user?id=" + this.props.comment.by}, 
                     this.props.comment.by
                 ), 
-                " — ", this.props.comment.time.toString(), ":", 
+                " — ", React.createElement(Timestamp, {time: this.props.comment.time}), ":", 
                 React.createElement("div", {className: "text", dangerouslySetInnerHTML: {__html: this.props.comment.text}})
             )
         }

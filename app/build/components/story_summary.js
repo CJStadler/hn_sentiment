@@ -3,7 +3,8 @@ var React = require('react'),
     Link = router.Link,
     api = require("../libs/api.js"),
     stats = require("../libs/stats.js"),
-    ColorPatch = require("./color_patch.js");
+    ColorPatch = require("./color_patch.js"),
+    Timestamp = require("./timestamp.js");
 
 
 var StorySummary = React.createClass({displayName: "StorySummary",
@@ -25,7 +26,7 @@ var StorySummary = React.createClass({displayName: "StorySummary",
                 story.score, " points |" + ' ' +
                 "by ", React.createElement("a", {href: "https://news.ycombinator.com/user?id=" + story.by}, 
                     story.by
-                ), 
+                ), " ", React.createElement(Timestamp, {time: story.time}), 
                 " | ", 
                 React.createElement(Link, {to: "/story/" + story.id}, 
                     story.descendants, " comments", 

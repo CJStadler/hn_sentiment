@@ -22,7 +22,6 @@ var api = {
             var item = snapshot.val();
 
             if (typeof item !== "undefined" && item !== null) {
-                item.time = new Date(item.time);
                 callback(item);
             } else {
                 console.log("item with id " + snapshot.key() + " not found");
