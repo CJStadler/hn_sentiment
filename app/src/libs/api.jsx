@@ -7,7 +7,6 @@ var api = {
     topstories: function(limit, refCollector, callback) {
         var ref = this.root_ref.child("topstories");
         refCollector(ref);
-
         ref.limitToFirst(limit).on("child_added", function(story_id_obj) {
             var id = story_id_obj.val();
             callback(id);
@@ -17,7 +16,7 @@ var api = {
     item: function(id, refCollector, callback) {
         var ref = this.root_ref.child("item/" + id);
         refCollector(ref);
-
+        debugger;
         ref.once("value", function(snapshot) {
             var item = snapshot.val();
 
@@ -31,7 +30,15 @@ var api = {
     },
 
     all_descendants: function(parent, refCollector, callback) {
-        var ref = this.root_ref.child("item/" + parent.id).child("kids");
+        // parent can be either an item or the id of an item
+        var id;
+        if (typeof parent === "number") {
+            id = parent;
+        } else {
+            id = parent.id;
+        }
+
+        var ref = this.root_ref.child("item/" + id).child("kids");
         refCollector(ref);
 
         ref.on("child_added", function(id_obj) {

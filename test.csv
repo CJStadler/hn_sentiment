@@ -1,0 +1,4 @@
+id,type,sentiment,text
+10974552,story,0,"hello test test test who what when where why"
+10975428,comment,0.058823529411764705,"hello world, hello world, hello world"
+10974728,comment,0.016901408450704224,"bye my bye test hello."
