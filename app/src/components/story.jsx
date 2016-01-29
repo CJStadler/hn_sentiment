@@ -12,29 +12,32 @@ var Story = React.createClass({
     },
 
     componentWillMount: function() {
-
         // get story
-        api.item(this.props.id, this.refCollector, function(story) {
-            story.sentiment = 0;
-            this.setState({story: story});
+        api.item(this.props.id, this.refCollector, this.add_story);
+    },
 
-            // nest all comments within the story, and collect the sentiments
-            api.all_descendants(story, this.refCollector, function(comment) {
-                if (! comment.hasOwnProperty("deleted") || comment.deleted === false) {
-                    var s_comp = sentiment(comment.text).comparative;
-                    comment.sentiment = s_comp;
-                    // update state
-                    this.setState(function(previousState, currentProps) {
-                        var sentiments = previousState.sentiments.slice();
-                        sentiments.push(s_comp);
-                        return {
-                            sentiments: sentiments
-                        };
-                    });
-                }
-            }.bind(this));
+    add_story: function(story) {
+        story.sentiment = 0;
+        this.setState({story: story});
 
-        }.bind(this));
+        // nest all comments within the story, and collect the sentiments
+        api.all_descendants(story, this.refCollector, this.add_comment_sentiment);
+
+    },
+
+    add_comment_sentiment: function(comment) {
+        if (! comment.hasOwnProperty("deleted") || comment.deleted === false) {
+            var s_comp = sentiment(comment.text).comparative;
+            comment.sentiment = s_comp;
+            // update state
+            this.setState(function(previousState, currentProps) {
+                var sentiments = previousState.sentiments.slice();
+                sentiments.push(s_comp);
+                return {
+                    sentiments: sentiments
+                };
+            });
+        }
     },
 
     componentWillUnmount: function() {

@@ -10,16 +10,16 @@ var api = {
         ref.limitToFirst(limit).on("child_added", function(story_id_obj) {
             var id = story_id_obj.val();
             callback(id);
+        }, function(error) {
+            console.log(error);
         });
     },
 
     item: function(id, refCollector, callback) {
         var ref = this.root_ref.child("item/" + id);
         refCollector(ref);
-        debugger;
         ref.once("value", function(snapshot) {
             var item = snapshot.val();
-
             if (typeof item !== "undefined" && item !== null) {
                 callback(item);
             } else {

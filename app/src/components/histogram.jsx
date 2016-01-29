@@ -8,6 +8,10 @@ var Histogram = React.createClass({
         this.setState({chart: hist});
     },
 
+    shouldComponentUpdate: function(nextProps) {
+        return nextProps.values.length !== this.props.values.length;
+    },
+
     componentDidUpdate: function() {
         this.state.chart.render(this.props.values, this.props.click_callback);
     },

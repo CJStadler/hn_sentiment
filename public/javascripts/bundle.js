@@ -36,6 +36,14 @@ var React = require('react'),
 
 var ColorPatch = React.createClass({displayName: "ColorPatch",
 
+    propTypes: {
+        score: React.PropTypes.number.isRequired
+    },
+
+    shouldComponentUpdate: function(nextProps, nextState) {
+        return nextProps.score !== this.props.score;
+    },
+
     render: function() {
         var color = color_scale(this.props.score);
 
@@ -81,6 +89,18 @@ var Comment = React.createClass({displayName: "Comment",
         }
     },
 
+    // shouldComponentUpdate: function(nextProps, nextState) {
+    //     var state_change = nextState.closed !== this.state.closed;
+    //
+    //     var prop_change = nextProps.closed !== this.props.closed ||
+    //                         nextProps.range.min !== this.props.range.min ||
+    //                         nextProps.range.max !== this.props.range.max ||
+    //                         nextProps.comment.comments !== this.props.comment.comments;
+    //      // Well that doesn't work
+    //
+    //     return state_change || prop_change;
+    // },
+
     render: function() {
         var normalized_sentiment,
             comments,
@@ -114,7 +134,7 @@ var Comment = React.createClass({displayName: "Comment",
                     key: comment.id, 
                     range: this.props.range, 
                     closed: children_closed});
-            }.bind(this));
+            }, this);
         }
 
         if (closed) {
@@ -157,6 +177,10 @@ var Histogram = React.createClass({displayName: "Histogram",
     componentDidMount: function(node) {
         var hist = d3Histogram.new_chart(this.chart_id(), this.props.values);
         this.setState({chart: hist});
+    },
+
+    shouldComponentUpdate: function(nextProps) {
+        return nextProps.values.length !== this.props.values.length;
     },
 
     componentDidUpdate: function() {
@@ -240,29 +264,32 @@ var Story = React.createClass({displayName: "Story",
     },
 
     componentWillMount: function() {
-
         // get story
-        api.item(this.props.id, this.refCollector, function(story) {
-            story.sentiment = 0;
-            this.setState({story: story});
+        api.item(this.props.id, this.refCollector, this.add_story);
+    },
 
-            // nest all comments within the story, and collect the sentiments
-            api.all_descendants(story, this.refCollector, function(comment) {
-                if (! comment.hasOwnProperty("deleted") || comment.deleted === false) {
-                    var s_comp = sentiment(comment.text).comparative;
-                    comment.sentiment = s_comp;
-                    // update state
-                    this.setState(function(previousState, currentProps) {
-                        var sentiments = previousState.sentiments.slice();
-                        sentiments.push(s_comp);
-                        return {
-                            sentiments: sentiments
-                        };
-                    });
-                }
-            }.bind(this));
+    add_story: function(story) {
+        story.sentiment = 0;
+        this.setState({story: story});
 
-        }.bind(this));
+        // nest all comments within the story, and collect the sentiments
+        api.all_descendants(story, this.refCollector, this.add_comment_sentiment);
+
+    },
+
+    add_comment_sentiment: function(comment) {
+        if (! comment.hasOwnProperty("deleted") || comment.deleted === false) {
+            var s_comp = sentiment(comment.text).comparative;
+            comment.sentiment = s_comp;
+            // update state
+            this.setState(function(previousState, currentProps) {
+                var sentiments = previousState.sentiments.slice();
+                sentiments.push(s_comp);
+                return {
+                    sentiments: sentiments
+                };
+            });
+        }
     },
 
     componentWillUnmount: function() {
@@ -338,6 +365,12 @@ var React = require('react'),
 
 
 var StorySummary = React.createClass({displayName: "StorySummary",
+
+    shouldComponentUpdate: function(nextProps) {
+        return nextProps.story.id !== this.props.story.id ||
+                nextProps.index !== this.props.index ||
+                nextProps.sentiments.length !== this.props.sentiments.length;
+    },
 
     render: function() {
         var normalized_mean = stats.normalized_mean(this.props.sentiments);
@@ -447,20 +480,19 @@ var api = {
     topstories: function(limit, refCollector, callback) {
         var ref = this.root_ref.child("topstories");
         refCollector(ref);
-
         ref.limitToFirst(limit).on("child_added", function(story_id_obj) {
             var id = story_id_obj.val();
             callback(id);
+        }, function(error) {
+            console.log(error);
         });
     },
 
     item: function(id, refCollector, callback) {
         var ref = this.root_ref.child("item/" + id);
         refCollector(ref);
-
         ref.once("value", function(snapshot) {
             var item = snapshot.val();
-
             if (typeof item !== "undefined" && item !== null) {
                 callback(item);
             } else {
@@ -471,7 +503,15 @@ var api = {
     },
 
     all_descendants: function(parent, refCollector, callback) {
-        var ref = this.root_ref.child("item/" + parent.id).child("kids");
+        // parent can be either an item or the id of an item
+        var id;
+        if (typeof parent === "number") {
+            id = parent;
+        } else {
+            id = parent.id;
+        }
+
+        var ref = this.root_ref.child("item/" + id).child("kids");
         refCollector(ref);
 
         ref.on("child_added", function(id_obj) {
@@ -695,7 +735,7 @@ var React = require('react'),
     Story = require('../components/story.js'),
     Pagination = require('../components/pagination.js');
 
-var per_page = 10;
+var per_page = 30;
 
 var Index = React.createClass({displayName: "Index",
 
@@ -704,15 +744,17 @@ var Index = React.createClass({displayName: "Index",
     },
 
     componentWillMount: function() {
+        api.topstories(500, this.refCollector, this.add_story_id);
+    },
 
-        api.topstories(100, function(ref) {
-            this.setState({ref: ref});
-        }.bind(this), function(id) {
-            var ids = this.state.story_ids.slice();
-            ids.push(id);
-            this.setState({story_ids: ids});
-        }.bind(this));
+    refCollector: function(ref) {
+        this.setState({ref: ref});
+    },
 
+    add_story_id: function(id) {
+        var ids = this.state.story_ids.slice();
+        ids.push(id);
+        this.setState({story_ids: ids});
     },
 
     componentWillUnmount: function() {

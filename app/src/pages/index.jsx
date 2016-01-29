@@ -3,7 +3,7 @@ var React = require('react'),
     Story = require('../components/story.js'),
     Pagination = require('../components/pagination.js');
 
-var per_page = 10;
+var per_page = 30;
 
 var Index = React.createClass({
 
@@ -12,15 +12,17 @@ var Index = React.createClass({
     },
 
     componentWillMount: function() {
+        api.topstories(500, this.refCollector, this.add_story_id);
+    },
 
-        api.topstories(100, function(ref) {
-            this.setState({ref: ref});
-        }.bind(this), function(id) {
-            var ids = this.state.story_ids.slice();
-            ids.push(id);
-            this.setState({story_ids: ids});
-        }.bind(this));
+    refCollector: function(ref) {
+        this.setState({ref: ref});
+    },
 
+    add_story_id: function(id) {
+        var ids = this.state.story_ids.slice();
+        ids.push(id);
+        this.setState({story_ids: ids});
     },
 
     componentWillUnmount: function() {

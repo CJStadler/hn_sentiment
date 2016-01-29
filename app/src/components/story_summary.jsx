@@ -9,6 +9,12 @@ var React = require('react'),
 
 var StorySummary = React.createClass({
 
+    shouldComponentUpdate: function(nextProps) {
+        return nextProps.story.id !== this.props.story.id ||
+                nextProps.index !== this.props.index ||
+                nextProps.sentiments.length !== this.props.sentiments.length;
+    },
+
     render: function() {
         var normalized_mean = stats.normalized_mean(this.props.sentiments);
         var story = this.props.story;

@@ -3,6 +3,14 @@ var React = require('react'),
 
 var ColorPatch = React.createClass({displayName: "ColorPatch",
 
+    propTypes: {
+        score: React.PropTypes.number.isRequired
+    },
+
+    shouldComponentUpdate: function(nextProps, nextState) {
+        return nextProps.score !== this.props.score;
+    },
+
     render: function() {
         var color = color_scale(this.props.score);
 

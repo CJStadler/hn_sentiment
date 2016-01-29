@@ -22,6 +22,18 @@ var Comment = React.createClass({displayName: "Comment",
         }
     },
 
+    // shouldComponentUpdate: function(nextProps, nextState) {
+    //     var state_change = nextState.closed !== this.state.closed;
+    //
+    //     var prop_change = nextProps.closed !== this.props.closed ||
+    //                         nextProps.range.min !== this.props.range.min ||
+    //                         nextProps.range.max !== this.props.range.max ||
+    //                         nextProps.comment.comments !== this.props.comment.comments;
+    //      // Well that doesn't work
+    //
+    //     return state_change || prop_change;
+    // },
+
     render: function() {
         var normalized_sentiment,
             comments,
@@ -55,7 +67,7 @@ var Comment = React.createClass({displayName: "Comment",
                     key: comment.id, 
                     range: this.props.range, 
                     closed: children_closed});
-            }.bind(this));
+            }, this);
         }
 
         if (closed) {
