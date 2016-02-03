@@ -28,7 +28,7 @@
     "react-dom": "^0.14.0",
     "react-router": "^1.0.3",
     "reactfire": "^0.5.1",
-    "request-promise": "^2.0.0",
+    "request": "^2.69.0",
     "sentiment": "^1.0.4"
   },
   "devDependencies": {
