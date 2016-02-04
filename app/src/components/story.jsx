@@ -3,7 +3,8 @@ var React = require('react'),
     api = require('../libs/api.js'),
     StorySummary = require('../components/story_summary.js'),
     Comment = require('../components/comment.js'),
-    Histogram = require('../components/histogram.js');
+    Histogram = require('../components/histogram.js'),
+    TermFrequencies = require('../components/term_frequencies.js');
 
 var Story = React.createClass({
 
@@ -48,7 +49,7 @@ var Story = React.createClass({
 
     render: function() {
         var content = "Loading...";
-        var comments;
+        var comments, term_frequencies;
         if (this.state.story !== null) {
             if (! this.props.condensed && this.state.story.hasOwnProperty("comments")) {
 
@@ -59,12 +60,15 @@ var Story = React.createClass({
                     comment={this.state.story}
                     key={this.state.story.id}
                     range={this.state.range} />;
+
+                term_frequencies = <TermFrequencies story={this.state.story} />;
             }
             content = <div>
                 <StorySummary index={this.props.index} sentiments={this.state.sentiments} story={this.state.story} />
                 <Histogram id={this.state.story.id}
                     values={this.state.sentiments}
                     click_callback={this.toggle_sentiment_range} />
+                {term_frequencies}
                 {comments}
             </div>;
         }
