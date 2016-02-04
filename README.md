@@ -11,7 +11,7 @@ Each comment is labeled using the same method, but the histogram shows the raw s
 Uses node.js, React, D3.js, and the [sentiment](https://github.com/thisandagain/sentiment) module.
 
 ## Ideas for comment clustering
-Use [tf-idf](https://github.com/NaturalNode/natural#tf-idf) to identify the N most "important" words within a comment thread, relative to a corpus of comments. Use the presence of these words in each comment as features in a clustering model.
+Use [tf-idf](https://github.com/NaturalNode/natural#tf-idf) to identify the N most "important" words within a comment thread, relative to a corpus of comments. Use the presence (or frequency?) of these words in each comment as features in a clustering model.
 
 See: http://brandonrose.org/clustering
 
