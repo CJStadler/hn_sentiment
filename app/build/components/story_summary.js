@@ -1,8 +1,8 @@
 var React = require('react'),
     router = require('react-router'),
     Link = router.Link,
-    api = require("../libs/api.js"),
-    stats = require("../libs/stats.js"),
+    api = require("../../../libs/firebase_api.js"),
+    stats = require("../../../libs/stats.js"),
     ColorPatch = require("./color_patch.js"),
     Timestamp = require("./timestamp.js");
 

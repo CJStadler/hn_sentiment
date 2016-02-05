@@ -1,5 +1,5 @@
 var React = require('react'),
-    d3Histogram = require('../libs/d3_histogram.js');
+    d3Histogram = require('../../../libs/d3_histogram.js');
 
 var Histogram = React.createClass({
 

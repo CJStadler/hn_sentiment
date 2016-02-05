@@ -1,6 +1,6 @@
 var React = require('react'),
     d3 = require('d3'),
-    TfIdf = require('../../../node_modules/natural/lib/natural/tfidf/tfidf');
+    TfIdf = require('../../../libs/tfidf.js');
 
 var corpus;
 

@@ -1,6 +1,6 @@
 var React = require('react'),
     sentiment = require('sentiment'),
-    api = require('../libs/api.js'),
+    api = require('../../../libs/firebase_api.js'),
     StorySummary = require('../components/story_summary.js'),
     Comment = require('../components/comment.js'),
     Histogram = require('../components/histogram.js'),
