@@ -1,11 +1,11 @@
 var React = require('react'),
     d3 = require('d3'),
-    TfIdf = require('../../../libs/tfidf.js');
+    TfIdf = require('../../../node_modules/natural/lib/natural/tfidf/tfidf');
 
 var corpus;
 
 // load corpus
-d3.json("/tfidf.json", function(error, json) {
+d3.json("/idfs.json", function(error, json) {
     if (error) {
         return console.warn(error);
     } else {
