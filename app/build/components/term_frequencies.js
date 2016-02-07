@@ -1,15 +1,15 @@
 var React = require('react'),
     d3 = require('d3'),
-    TfIdf = require('../../../node_modules/natural/lib/natural/tfidf/tfidf');
+    tfidf = require("../../../libs/tfidf");
 
-var corpus;
+var idfs;
 
 // load corpus
 d3.json("/idfs.json", function(error, json) {
     if (error) {
         return console.warn(error);
     } else {
-        corpus = json;
+        idfs = json;
     }
 });
 
@@ -21,24 +21,18 @@ var TermFrequencies = React.createClass({displayName: "TermFrequencies",
 
     render: function() {
         var terms;
-        if (typeof corpus === "object") { // is loaded
-
-            var tfidf = new TfIdf(corpus);
+        if (typeof idfs === "object") { // is loaded
 
             var all_comments = get_all_comments(this.props.story);
-            console.log(all_comments.length + " comments found");
 
-            tfidf.addDocument(all_comments.join(" "));
-
+            // when all comments are loaded find the most important terms
             if (all_comments.length >= this.props.story.descendants) {
-                // this is super slow
                 var t0 = performance.now();
-                var i = tfidf.documents.length - 1; // the one we added is the last document
-                terms = tfidf.listTerms(i).slice(0,20).map(function(t) {
+                terms = tfidf.get_important_terms(all_comments, idfs).map(function(t) {
                     return React.createElement("div", {key: t.term}, t.term + ": " + t.tfidf);
                 });
                 var t1 = performance.now();
-                console.log("time: " + (t1 - t0)/1000 + " seconds");
+                console.log("time: " + (t1-t0));
             }
         }
 
