@@ -1,5 +1,5 @@
 var React = require('react'),
-    stats = require("../../../libs/stats.js"),
+    stats = require("../../../lib/stats.js"),
     ColorPatch = require("./color_patch.js"),
     Timestamp = require("./timestamp.js");
 

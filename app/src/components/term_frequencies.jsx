@@ -1,6 +1,7 @@
 var React = require('react'),
     d3 = require('d3'),
-    tfidf = require("../../../libs/tfidf");
+    keywords = require("../../../lib/keywords.js"),
+    Clustering = require("./clustering.js");
 
 var idfs;
 
@@ -20,23 +21,26 @@ var TermFrequencies = React.createClass({
     },
 
     render: function() {
-        var terms;
+        var frequent_terms, displayed_terms;
         if (typeof idfs === "object") { // is loaded
 
             var all_comments = get_all_comments(this.props.story);
 
-            // when all comments are loaded find the most important terms
+            // when all comments are loaded find the most important terms and cluster
             if (all_comments.length >= this.props.story.descendants) {
-                var t0 = performance.now();
-                terms = tfidf.get_important_terms(all_comments, idfs).map(function(t) {
+                frequent_terms = keywords.get_keywords(all_comments, idfs)
+
+                displayed_terms = frequent_terms.slice(0,10).map(function(t) {
                     return <div key={t.term}>{t.term + ": " + t.frequency + ", " + t.tfidf}</div>;
                 });
-                var t1 = performance.now();
-                console.log("time: " + (t1-t0));
+
             }
         }
 
-        return <div>{terms}</div>;
+        return <div>
+            <Clustering comments={all_comments} terms={frequent_terms} />
+            {displayed_terms}
+        </div>;
     }
 });
 
@@ -51,7 +55,7 @@ var get_all_comments = function(item) {
     }
 
     if (item.hasOwnProperty("text")) {
-        comments.push(item.text);
+        comments.push(item);
     }
 
     return comments;

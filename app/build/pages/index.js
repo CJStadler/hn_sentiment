@@ -1,5 +1,5 @@
 var React = require('react'),
-    api = require("../../../libs/firebase_api.js"),
+    api = require("../../../lib/firebase_api.js"),
     Story = require('../components/story.js'),
     Pagination = require('../components/pagination.js');
 

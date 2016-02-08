@@ -1,5 +1,5 @@
 var React = require('react'),
-    color_scale = require('../../../libs/color_scale.js');
+    color_scale = require('../../../lib/color_scale.js');
 
 var ColorPatch = React.createClass({displayName: "ColorPatch",
 
