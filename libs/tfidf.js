@@ -1,83 +1,53 @@
 // need to include these modules directly because natural can't be browserified
-var TfIdf = require("../node_modules/natural/lib/natural/tfidf/tfidf"),
-    Tokenizer = require("../node_modules/natural/lib/natural/tokenizers/regexp_tokenizer").WordTokenizer,
+var Tokenizer = require("../node_modules/natural/lib/natural/tokenizers/regexp_tokenizer").WordTokenizer,
     tokenizer = new Tokenizer(),
     stopwords = require("../node_modules/natural/lib/natural/util/stopwords").words;
 
+var custom_stopwords = ["quot", "x2f", "x27", "www", "com", "pre", "gt", "href", "rel", "nofollow"];
+
+stopwords = stopwords.concat(custom_stopwords);
+
+// order terms by the # of comments they appear in
 var get_important_terms = function(comments, idfs) {
     var n_comments = comments.length;
 
-    // turn each comment into a dictionary of {term: idf}
-    var comments_idfs = comments
-        .map(frequencies_from_comment)
-        .map(function(frequencies) {
-            return tfidfs_from_frequencies(frequencies, idfs);
-        });
+    // get an array of all terms, but each comment can only contribute 1 of each term
+    var all_terms = comments.map(function(text) {
+        // turn each comment into an array of tokens
+        var tokens = tokenizer.tokenize(text.toLowerCase());
+        return Array.from(new Set(tokens)); // unique
+    }).reduce(function(all_terms, comment_terms) {
+        // reduce to a single array of all terms
+        return all_terms.concat(comment_terms);
+    }, []);
 
-    // reduce the dictionaries for each comment into a single dictionary, summing the idfs
-    var overall_tfidfs = comments_idfs.reduce(sum_tfidfs, {});
+    // reduce to a dictionary of {term: frequency}
+    var overall_frequencies = all_terms.reduce(function(dictionary, term) {
+        // based on https://github.com/NaturalNode/natural/blob/master/lib/natural/tfidf/tfidf.js
+        if(typeof dictionary[term] === 'function') dictionary[term] = 0;
+        if(stopwords.indexOf(term) < 0)
+            dictionary[term] = (dictionary[term] ? dictionary[term] + 1 : 1);
+        return dictionary;
+    }, {});
 
-    // divide each idf by the number of comments if we want mean instead of sum
-    // var term_tfidf;
-    // var term;
-    // for (term in overall_tfidfs) {
-    //     term_tfidf = overall_idfs[term]
-    //     term_tfidf = term_tfidf/n_comments
-    // }
+    // normalize by idf and # of comments and turn into array
+    var terms_with_frequencies = dict_to_array(overall_frequencies, n_comments, idfs);
 
-    terms = dict_to_array(overall_tfidfs);
-
-    terms.sort(function(a, b) {
-        return a.tfidf >= b.tfidf ? -1 : 1;
+    terms_with_frequencies.sort(function(a, b) {
+        return a.frequency >= b.frequency ? -1 : 1;
     });
 
-    return terms.slice(0,20);
+    return terms_with_frequencies.slice(0,20);
 };
 
-// based on https://github.com/NaturalNode/natural/blob/master/lib/natural/tfidf/tfidf.js
-var frequencies_from_comment = function(comment_text) {
-    var tokens = tokenizer.tokenize(comment_text.toLowerCase());
-
-    return tokens.reduce(function(document, term) {
-        if(typeof document[term] === 'function') document[term] = 0;
-        if(stopwords.indexOf(term) < 0)
-            document[term] = (document[term] ? document[term] + 1 : 1);
-        return document;
-    }, {});
-};
-
-var tfidfs_from_frequencies = function(frequencies, idfs) {
-    var term;
-    for (term in frequencies) {
-        // based on https://github.com/NaturalNode/natural/blob/master/lib/natural/tfidf/tfidf.js
-        var idf = idfs[term];
-        if (idf === Infinity || typeof idf === "undefined") {
-            idf = 0;
-        }
-        frequencies[term] = frequencies[term] * idf;
-    }
-    return frequencies; // but now they are tfidfs
-};
-
-var sum_tfidfs = function(sums, comment_tfidfs) {
-    var term;
-    for (term in comment_tfidfs) {
-        if (sums.hasOwnProperty(term)) {
-            sums[term] = sums[term] + comment_tfidfs[term];
-        } else {
-            sums[term] = comment_tfidfs[term];
-        }
-    }
-
-    return sums;
-};
-
-var dict_to_array = function(dict) {
+var dict_to_array = function(dict, n_comments, idfs) {
     var array = [];
 
-    var term;
+    var term, frequency, tfidf;
     for (term in dict) {
-        array.push({term: term, tfidf: dict[term]});
+        frequency = dict[term] / n_comments;
+        tfidf = frequency * idfs[term];
+        array.push({term: term, frequency: frequency, tfidf: tfidf});
     }
 
     return array;

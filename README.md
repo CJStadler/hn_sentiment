@@ -10,24 +10,25 @@ Each comment is labeled using the same method, but the histogram shows the raw s
 
 Uses node.js, React, D3.js, and the [sentiment](https://github.com/thisandagain/sentiment) module.
 
-## comment clustering
-Use [tf-idf](https://github.com/NaturalNode/natural#tf-idf) to identify the N most "important" words within a comment thread, relative to a corpus of comments. Use the presence (or frequency?) of these words in each comment as features in a clustering model.
-
-See: http://brandonrose.org/clustering
-
-### Steps
+## Important terms
+Use [tf-idf](https://github.com/NaturalNode/natural#tf-idf) to identify the N most "important" words within a comment thread, relative to a corpus of comments.
 
 1. Generate csv with large corpus of comments .
 2. Analyze corpus with tf-idf, and store the idf cache in a json file.
 3. Given a story, load the idf cache for the corpus.
-4. For each comment generate a list of terms and their tf-idf relative to the corpus.
-5. Generate a list of all terms in the comment thread and average their tf-idf from each comment.
-6. Select some N terms.
-7. For each comment create a vector from the presence (or tf-idf?) of each N term.
+4. Calculate the tf-idf for each term in the comment thread (normalize by length?), relative to the corpus.
+6. Select some N terms with the highest scores.
+
+## Clustering
+Use the presence (or frequency?) of these words in each comment as features in a clustering model. Maybe exclude some if they are too common?
+
+7. For each comment create a vector from the presence/frequency/tfidf of each term.
 8. Do some kind of clustering using the vectors.
+
+See: http://brandonrose.org/clustering
 
 
 ## TODO:
 
 - Check distribution of comments
-- Performance
+- Performance: http://benchling.engineering/performance-engineering-with-react/

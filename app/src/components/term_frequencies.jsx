@@ -29,7 +29,7 @@ var TermFrequencies = React.createClass({
             if (all_comments.length >= this.props.story.descendants) {
                 var t0 = performance.now();
                 terms = tfidf.get_important_terms(all_comments, idfs).map(function(t) {
-                    return <div key={t.term}>{t.term + ": " + t.tfidf}</div>;
+                    return <div key={t.term}>{t.term + ": " + t.frequency + ", " + t.tfidf}</div>;
                 });
                 var t1 = performance.now();
                 console.log("time: " + (t1-t0));
