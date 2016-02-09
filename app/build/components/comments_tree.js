@@ -5,6 +5,7 @@ var React = require('react'),
 var CommentsTree = React.createClass({displayName: "CommentsTree",
 
     propTypes: {
+        loaded: React.PropTypes.bool.isRequired,
         root: React.PropTypes.object.isRequired
     },
 
@@ -14,7 +15,9 @@ var CommentsTree = React.createClass({displayName: "CommentsTree",
     },
 
     componentDidUpdate: function() {
-        this.state.chart.render(this.props.root);
+        if (this.props.loaded) {
+            this.state.chart.render(this.props.root);
+        }
     },
 
     chart_id: "d3-tree-container",
@@ -34,7 +37,16 @@ var CommentsTree = React.createClass({displayName: "CommentsTree",
         //         </div>;
         // });
 
-        return React.createElement("div", {id: this.chart_id});
+        var loading;
+
+        if (! this.props.loaded) {
+            loading = "loading...";
+        }
+
+        return React.createElement("div", null, 
+            loading, 
+            React.createElement("div", {id: this.chart_id})
+        );
     }
 
 });

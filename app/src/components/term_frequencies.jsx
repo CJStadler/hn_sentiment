@@ -16,23 +16,21 @@ d3.json("/idfs.json", function(error, json) {
 var TermFrequencies = React.createClass({
 
     propTypes: {
-        story: React.PropTypes.object.isRequired
+        loaded: React.PropTypes.bool.isRequired,
+        comments: React.PropTypes.array.isRequired
     },
 
     render: function() {
         var frequent_terms, displayed_terms;
         if (typeof idfs === "object") { // is loaded
 
-            var all_comments = get_all_comments(this.props.story);
-
             // when all comments are loaded find the most important terms and cluster
-            if (all_comments.length >= this.props.story.descendants) {
-                frequent_terms = keywords.get_keywords(all_comments, idfs)
+            if (this.props.loaded) {
+                frequent_terms = keywords.get_keywords(this.props.comments, idfs);
 
                 displayed_terms = frequent_terms.slice(0,10).map(function(t) {
                     return <div key={t.term}>{t.term + ": " + t.frequency + ", " + t.tfidf}</div>;
                 });
-
             }
         }
 
@@ -41,23 +39,5 @@ var TermFrequencies = React.createClass({
         </div>;
     }
 });
-
-// go through the tree of comments and construct an array with the text of each
-var get_all_comments = function(item) {
-
-    var comments = [];
-
-    if (item.hasOwnProperty("comments")) {
-        comments = item.comments.map(get_all_comments);
-        comments = [].concat.apply([], comments);
-    }
-
-    if (item.hasOwnProperty("text")) {
-        comments.push(item);
-    }
-
-    return comments;
-}
-
 
 module.exports = TermFrequencies;

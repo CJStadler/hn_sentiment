@@ -10,7 +10,7 @@ var React = require('react'),
 var Story = React.createClass({displayName: "Story",
 
     getInitialState: function() {
-        return {story: null, sentiments: [], refs: [], range: {min: -100, max: 100}};
+        return {story: null, comments: [], refs: [], range: {min: -100, max: 100}};
     },
 
     componentWillMount: function() {
@@ -23,20 +23,22 @@ var Story = React.createClass({displayName: "Story",
         this.setState({story: story});
 
         // nest all comments within the story, and collect the sentiments
-        api.all_descendants(story, this.refCollector, this.add_comment_sentiment);
-
+        api.all_descendants(story, this.refCollector, this.add_comment);
     },
 
-    add_comment_sentiment: function(comment) {
+    add_comment: function(comment) {
         if (! comment.hasOwnProperty("deleted") || comment.deleted === false) {
             var s_comp = sentiment(comment.text).comparative;
             comment.sentiment = s_comp;
             // update state
             this.setState(function(previousState, currentProps) {
-                var sentiments = previousState.sentiments.slice();
-                sentiments.push(s_comp);
+                var comments = previousState.comments.slice();
+                comments.push(comment);
+
+                var all_loaded = comments.length >= previousState.story.descendants;
                 return {
-                    sentiments: sentiments
+                    comments: comments,
+                    comments_loaded: all_loaded
                 };
             });
         }
@@ -50,6 +52,8 @@ var Story = React.createClass({displayName: "Story",
 
     render: function() {
         var content = "Loading...";
+        var sentiments = this.state.comments.map(function(c) { return c.sentiment; });
+
         var comments, term_frequencies;
         if (this.state.story !== null) {
             if (! this.props.condensed && this.state.story.hasOwnProperty("comments")) {
@@ -59,14 +63,16 @@ var Story = React.createClass({displayName: "Story",
                 //     key={this.state.story.id}
                 //     range={this.state.range} />;
 
-                term_frequencies = React.createElement(TermFrequencies, {story: this.state.story});
+                term_frequencies = React.createElement(TermFrequencies, {
+                    loaded: this.state.comments_loaded, 
+                    comments: this.state.comments});
 
-                comments = React.createElement(CommentsTree, {root: this.state.story});
+                comments = React.createElement(CommentsTree, {loaded: this.state.comments_loaded, root: this.state.story});
             }
             content = React.createElement("div", null, 
-                React.createElement(StorySummary, {index: this.props.index, sentiments: this.state.sentiments, story: this.state.story}), 
+                React.createElement(StorySummary, {index: this.props.index, sentiments: sentiments, story: this.state.story}), 
                 React.createElement(Histogram, {id: this.state.story.id, 
-                    values: this.state.sentiments, 
+                    values: sentiments, 
                     click_callback: this.toggle_sentiment_range}), 
                 term_frequencies, 
                 comments

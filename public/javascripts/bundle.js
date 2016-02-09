@@ -176,6 +176,7 @@ var React = require('react'),
 var CommentsTree = React.createClass({displayName: "CommentsTree",
 
     propTypes: {
+        loaded: React.PropTypes.bool.isRequired,
         root: React.PropTypes.object.isRequired
     },
 
@@ -185,7 +186,9 @@ var CommentsTree = React.createClass({displayName: "CommentsTree",
     },
 
     componentDidUpdate: function() {
-        this.state.chart.render(this.props.root);
+        if (this.props.loaded) {
+            this.state.chart.render(this.props.root);
+        }
     },
 
     chart_id: "d3-tree-container",
@@ -205,7 +208,16 @@ var CommentsTree = React.createClass({displayName: "CommentsTree",
         //         </div>;
         // });
 
-        return React.createElement("div", {id: this.chart_id});
+        var loading;
+
+        if (! this.props.loaded) {
+            loading = "loading...";
+        }
+
+        return React.createElement("div", null, 
+            loading, 
+            React.createElement("div", {id: this.chart_id})
+        );
     }
 
 });
@@ -306,7 +318,7 @@ var React = require('react'),
 var Story = React.createClass({displayName: "Story",
 
     getInitialState: function() {
-        return {story: null, sentiments: [], refs: [], range: {min: -100, max: 100}};
+        return {story: null, comments: [], refs: [], range: {min: -100, max: 100}};
     },
 
     componentWillMount: function() {
@@ -319,20 +331,22 @@ var Story = React.createClass({displayName: "Story",
         this.setState({story: story});
 
         // nest all comments within the story, and collect the sentiments
-        api.all_descendants(story, this.refCollector, this.add_comment_sentiment);
-
+        api.all_descendants(story, this.refCollector, this.add_comment);
     },
 
-    add_comment_sentiment: function(comment) {
+    add_comment: function(comment) {
         if (! comment.hasOwnProperty("deleted") || comment.deleted === false) {
             var s_comp = sentiment(comment.text).comparative;
             comment.sentiment = s_comp;
             // update state
             this.setState(function(previousState, currentProps) {
-                var sentiments = previousState.sentiments.slice();
-                sentiments.push(s_comp);
+                var comments = previousState.comments.slice();
+                comments.push(comment);
+
+                var all_loaded = comments.length >= previousState.story.descendants;
                 return {
-                    sentiments: sentiments
+                    comments: comments,
+                    comments_loaded: all_loaded
                 };
             });
         }
@@ -346,6 +360,8 @@ var Story = React.createClass({displayName: "Story",
 
     render: function() {
         var content = "Loading...";
+        var sentiments = this.state.comments.map(function(c) { return c.sentiment; });
+
         var comments, term_frequencies;
         if (this.state.story !== null) {
             if (! this.props.condensed && this.state.story.hasOwnProperty("comments")) {
@@ -355,14 +371,16 @@ var Story = React.createClass({displayName: "Story",
                 //     key={this.state.story.id}
                 //     range={this.state.range} />;
 
-                term_frequencies = React.createElement(TermFrequencies, {story: this.state.story});
+                term_frequencies = React.createElement(TermFrequencies, {
+                    loaded: this.state.comments_loaded, 
+                    comments: this.state.comments});
 
-                comments = React.createElement(CommentsTree, {root: this.state.story});
+                comments = React.createElement(CommentsTree, {loaded: this.state.comments_loaded, root: this.state.story});
             }
             content = React.createElement("div", null, 
-                React.createElement(StorySummary, {index: this.props.index, sentiments: this.state.sentiments, story: this.state.story}), 
+                React.createElement(StorySummary, {index: this.props.index, sentiments: sentiments, story: this.state.story}), 
                 React.createElement(Histogram, {id: this.state.story.id, 
-                    values: this.state.sentiments, 
+                    values: sentiments, 
                     click_callback: this.toggle_sentiment_range}), 
                 term_frequencies, 
                 comments
@@ -469,23 +487,21 @@ d3.json("/idfs.json", function(error, json) {
 var TermFrequencies = React.createClass({displayName: "TermFrequencies",
 
     propTypes: {
-        story: React.PropTypes.object.isRequired
+        loaded: React.PropTypes.bool.isRequired,
+        comments: React.PropTypes.array.isRequired
     },
 
     render: function() {
         var frequent_terms, displayed_terms;
         if (typeof idfs === "object") { // is loaded
 
-            var all_comments = get_all_comments(this.props.story);
-
             // when all comments are loaded find the most important terms and cluster
-            if (all_comments.length >= this.props.story.descendants) {
-                frequent_terms = keywords.get_keywords(all_comments, idfs)
+            if (this.props.loaded) {
+                frequent_terms = keywords.get_keywords(this.props.comments, idfs);
 
                 displayed_terms = frequent_terms.slice(0,10).map(function(t) {
                     return React.createElement("div", {key: t.term}, t.term + ": " + t.frequency + ", " + t.tfidf);
                 });
-
             }
         }
 
@@ -494,24 +510,6 @@ var TermFrequencies = React.createClass({displayName: "TermFrequencies",
         );
     }
 });
-
-// go through the tree of comments and construct an array with the text of each
-var get_all_comments = function(item) {
-
-    var comments = [];
-
-    if (item.hasOwnProperty("comments")) {
-        comments = item.comments.map(get_all_comments);
-        comments = [].concat.apply([], comments);
-    }
-
-    if (item.hasOwnProperty("text")) {
-        comments.push(item);
-    }
-
-    return comments;
-}
-
 
 module.exports = TermFrequencies;
 
