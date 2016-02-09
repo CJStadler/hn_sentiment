@@ -94,3 +94,19 @@ svg {
   stroke: #000;
   shape-rendering: crispEdges;
 }
+
+/* Comments tree */
+.node circle {
+  stroke: steelblue;
+  stroke-width: 1.5px;
+}
+
+.node {
+  font: 10px sans-serif;
+}
+
+.link {
+  fill: none;
+  stroke: #ccc;
+  stroke-width: 1.5px;
+}

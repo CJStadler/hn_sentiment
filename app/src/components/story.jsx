@@ -4,7 +4,8 @@ var React = require('react'),
     StorySummary = require('../components/story_summary.js'),
     Comment = require('../components/comment.js'),
     Histogram = require('../components/histogram.js'),
-    TermFrequencies = require('../components/term_frequencies.js');
+    TermFrequencies = require('../components/term_frequencies.js'),
+    CommentsTree = require('../components/comments_tree.js');
 
 var Story = React.createClass({
 
@@ -53,15 +54,14 @@ var Story = React.createClass({
         if (this.state.story !== null) {
             if (! this.props.condensed && this.state.story.hasOwnProperty("comments")) {
 
-                // comments = this.state.story.comments.map(function(comment) {
-                //     return <Comment comment={comment} key={comment.id}/>;
-                // });
-                comments = <Comment
-                    comment={this.state.story}
-                    key={this.state.story.id}
-                    range={this.state.range} />;
+                // comments = <Comment
+                //     comment={this.state.story}
+                //     key={this.state.story.id}
+                //     range={this.state.range} />;
 
                 term_frequencies = <TermFrequencies story={this.state.story} />;
+
+                comments = <CommentsTree root={this.state.story} />;
             }
             content = <div>
                 <StorySummary index={this.props.index} sentiments={this.state.sentiments} story={this.state.story} />

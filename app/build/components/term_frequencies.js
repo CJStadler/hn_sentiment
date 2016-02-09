@@ -1,7 +1,6 @@
 var React = require('react'),
     d3 = require('d3'),
-    keywords = require("../../../lib/keywords.js"),
-    Clustering = require("./clustering.js");
+    keywords = require("../../../lib/keywords.js");
 
 var idfs;
 
@@ -38,7 +37,6 @@ var TermFrequencies = React.createClass({displayName: "TermFrequencies",
         }
 
         return React.createElement("div", null, 
-            React.createElement(Clustering, {comments: all_comments, terms: frequent_terms}), 
             displayed_terms
         );
     }
