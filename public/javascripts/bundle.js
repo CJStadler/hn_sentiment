@@ -170,7 +170,6 @@ module.exports = Comment;
 
 },{"../../../lib/stats.js":19,"./color_patch.js":2,"./timestamp.js":10,"react":230}],4:[function(require,module,exports){
 var React = require('react'),
-    clustering = require("../../../lib/clustering.js"),
     d3_tree = require("../../../lib/d3_tree.js");
 
 var CommentsTree = React.createClass({displayName: "CommentsTree",
@@ -211,7 +210,7 @@ var CommentsTree = React.createClass({displayName: "CommentsTree",
         var loading;
 
         if (! this.props.loaded) {
-            loading = "loading...";
+            loading = "Loading...";
         }
 
         return React.createElement("div", null, 
@@ -224,7 +223,7 @@ var CommentsTree = React.createClass({displayName: "CommentsTree",
 
 module.exports = CommentsTree;
 
-},{"../../../lib/clustering.js":13,"../../../lib/d3_tree.js":16,"react":230}],5:[function(require,module,exports){
+},{"../../../lib/d3_tree.js":16,"react":230}],5:[function(require,module,exports){
 var React = require('react'),
     d3Histogram = require('../../../lib/d3_histogram.js');
 
@@ -307,8 +306,11 @@ module.exports = Pagination;
 
 },{"react":230,"react-router":70}],7:[function(require,module,exports){
 var React = require('react'),
+    d3 = require('d3'),
     sentiment = require('sentiment'),
     api = require('../../../lib/firebase_api.js'),
+    get_keywords = require("../../../lib/keywords.js").get_keywords,
+    clustering = require("../../../lib/clustering.js"),
     StorySummary = require('../components/story_summary.js'),
     Comment = require('../components/comment.js'),
     Histogram = require('../components/histogram.js'),
@@ -318,12 +320,31 @@ var React = require('react'),
 var Story = React.createClass({displayName: "Story",
 
     getInitialState: function() {
-        return {story: null, comments: [], refs: [], range: {min: -100, max: 100}};
+        return {
+            story: null,
+            comments: [],
+            comments_loaded: false,
+            idfs: {},
+            idfs_loaded: false,
+            refs: [],
+            range: {min: -100, max: 100}
+        };
     },
 
     componentWillMount: function() {
         // get story
         api.item(this.props.id, this.refCollector, this.add_story);
+
+        // load idfs
+        d3.json("/idfs.json", this.store_idfs);
+    },
+
+    store_idfs: function(error, json) {
+        if (error) {
+            return console.warn(error);
+        } else {
+            this.setState({idfs: json, idfs_loaded: true});
+        }
     },
 
     add_story: function(story) {
@@ -362,20 +383,31 @@ var Story = React.createClass({displayName: "Story",
         var content = "Loading...";
         var sentiments = this.state.comments.map(function(c) { return c.sentiment; });
 
-        var comments, term_frequencies;
+        var comments, comments_tree, term_frequencies, keywords, clusters;
         if (this.state.story !== null) {
             if (! this.props.condensed && this.state.story.hasOwnProperty("comments")) {
 
-                // comments = <Comment
-                //     comment={this.state.story}
-                //     key={this.state.story.id}
-                //     range={this.state.range} />;
+                if (this.state.comments_loaded && this.state.idfs_loaded) {
+                    keywords = get_keywords(this.state.comments, this.state.idfs);
+                    clusters = clustering.clusters_from_comments(this.state.comments, keywords);
+                    clustering.label_comments(clusters);
+                }
 
                 term_frequencies = React.createElement(TermFrequencies, {
                     loaded: this.state.comments_loaded, 
-                    comments: this.state.comments});
+                    keywords: keywords});
 
-                comments = React.createElement(CommentsTree, {loaded: this.state.comments_loaded, root: this.state.story});
+                // clusters_summary = <ClustersSummary
+                //     loaded={this.state.comments_loaded}
+                //     keywords={keywords}
+                //     clusters={clusters} />
+
+                comments_tree = React.createElement(CommentsTree, {loaded: this.state.comments_loaded, root: this.state.story});
+
+                comments = React.createElement(Comment, {
+                    comment: this.state.story, 
+                    key: this.state.story.id, 
+                    range: this.state.range});
             }
             content = React.createElement("div", null, 
                 React.createElement(StorySummary, {index: this.props.index, sentiments: sentiments, story: this.state.story}), 
@@ -383,6 +415,7 @@ var Story = React.createClass({displayName: "Story",
                     values: sentiments, 
                     click_callback: this.toggle_sentiment_range}), 
                 term_frequencies, 
+                comments_tree, 
                 comments
             );
         }
@@ -420,7 +453,7 @@ var Story = React.createClass({displayName: "Story",
 
 module.exports = Story;
 
-},{"../../../lib/firebase_api.js":17,"../components/comment.js":3,"../components/comments_tree.js":4,"../components/histogram.js":5,"../components/story_summary.js":8,"../components/term_frequencies.js":9,"react":230,"sentiment":232}],8:[function(require,module,exports){
+},{"../../../lib/clustering.js":13,"../../../lib/firebase_api.js":17,"../../../lib/keywords.js":18,"../components/comment.js":3,"../components/comments_tree.js":4,"../components/histogram.js":5,"../components/story_summary.js":8,"../components/term_frequencies.js":9,"d3":21,"react":230,"sentiment":232}],8:[function(require,module,exports){
 var React = require('react'),
     router = require('react-router'),
     Link = router.Link,
@@ -473,36 +506,21 @@ var React = require('react'),
     d3 = require('d3'),
     keywords = require("../../../lib/keywords.js");
 
-var idfs;
-
-// load corpus
-d3.json("/idfs.json", function(error, json) {
-    if (error) {
-        return console.warn(error);
-    } else {
-        idfs = json;
-    }
-});
-
 var TermFrequencies = React.createClass({displayName: "TermFrequencies",
 
     propTypes: {
         loaded: React.PropTypes.bool.isRequired,
-        comments: React.PropTypes.array.isRequired
+        keywords: React.PropTypes.array
     },
 
     render: function() {
-        var frequent_terms, displayed_terms;
-        if (typeof idfs === "object") { // is loaded
+        var displayed_terms = "Loading...";
 
-            // when all comments are loaded find the most important terms and cluster
-            if (this.props.loaded) {
-                frequent_terms = keywords.get_keywords(this.props.comments, idfs);
-
-                displayed_terms = frequent_terms.slice(0,10).map(function(t) {
-                    return React.createElement("div", {key: t.term}, t.term + ": " + t.frequency + ", " + t.tfidf);
-                });
-            }
+        // when all comments are loaded find the most important terms and cluster
+        if (this.props.loaded) {
+            displayed_terms = this.props.keywords.map(function(t) {
+                return React.createElement("div", {key: t.term}, t.term + ": " + t.frequency + ", " + t.tfidf);
+            });
         }
 
         return React.createElement("div", null, 
@@ -718,9 +736,21 @@ var pick_features = function(terms, k) {
     });
 };
 
+// iterate through each comment in a set of clusters, and label it with it's cluster index
+var label_comments = function(clusters) {
+    clusters.forEach(function(cluster, i) {
+        cluster.forEach(function(comment_vector) {
+            comment_vector.comment.cluster = i;
+        });
+    });
+
+    return true;
+};
+
 module.exports = {
     clusters_from_comments: clusters_from_comments,
-    comments_to_vectors: comments_to_vectors
+    comments_to_vectors: comments_to_vectors,
+    label_comments: label_comments
 }
 
 },{"../node_modules/natural/lib/natural/tokenizers/regexp_tokenizer":46,"./keywords.js":18,"clusterfck":250,"d3":21}],14:[function(require,module,exports){
@@ -860,6 +890,8 @@ var diagonal = d3.svg.diagonal.radial()
         return [d.y, d.x / 180 * Math.PI];
     });
 
+var cluster_colors = d3.scale.category20();
+
 var d3_tree = function(container_id) {
 
     this.svg = d3.select("#" + container_id).append("svg")
@@ -895,13 +927,14 @@ d3_tree.prototype.render = function(root) {
         .append("circle")
         .attr("r", 6)
         .attr("fill", function(d) {
-            var c;
+            var color;
             if (d.type === "comment") {
-                c = color_scale(stats.normalize(d.sentiment)).toString();
+                color = color_scale(stats.normalize(d.sentiment)).toString();
+                color = cluster_colors(d.cluster);
             } else {
-                c = "steelblue";
+                color = "gray";
             }
-            return c;
+            return color;
         })
         .append("title")
         .html(function(d) { return d.text || ""; });

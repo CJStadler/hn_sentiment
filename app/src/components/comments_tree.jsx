@@ -1,5 +1,4 @@
 var React = require('react'),
-    clustering = require("../../../lib/clustering.js"),
     d3_tree = require("../../../lib/d3_tree.js");
 
 var CommentsTree = React.createClass({
@@ -40,7 +39,7 @@ var CommentsTree = React.createClass({
         var loading;
 
         if (! this.props.loaded) {
-            loading = "loading...";
+            loading = "Loading...";
         }
 
         return <div>

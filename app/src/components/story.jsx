@@ -1,6 +1,9 @@
 var React = require('react'),
+    d3 = require('d3'),
     sentiment = require('sentiment'),
     api = require('../../../lib/firebase_api.js'),
+    get_keywords = require("../../../lib/keywords.js").get_keywords,
+    clustering = require("../../../lib/clustering.js"),
     StorySummary = require('../components/story_summary.js'),
     Comment = require('../components/comment.js'),
     Histogram = require('../components/histogram.js'),
@@ -10,12 +13,31 @@ var React = require('react'),
 var Story = React.createClass({
 
     getInitialState: function() {
-        return {story: null, comments: [], refs: [], range: {min: -100, max: 100}};
+        return {
+            story: null,
+            comments: [],
+            comments_loaded: false,
+            idfs: {},
+            idfs_loaded: false,
+            refs: [],
+            range: {min: -100, max: 100}
+        };
     },
 
     componentWillMount: function() {
         // get story
         api.item(this.props.id, this.refCollector, this.add_story);
+
+        // load idfs
+        d3.json("/idfs.json", this.store_idfs);
+    },
+
+    store_idfs: function(error, json) {
+        if (error) {
+            return console.warn(error);
+        } else {
+            this.setState({idfs: json, idfs_loaded: true});
+        }
     },
 
     add_story: function(story) {
@@ -54,20 +76,31 @@ var Story = React.createClass({
         var content = "Loading...";
         var sentiments = this.state.comments.map(function(c) { return c.sentiment; });
 
-        var comments, term_frequencies;
+        var comments, comments_tree, term_frequencies, keywords, clusters, labeled;
         if (this.state.story !== null) {
             if (! this.props.condensed && this.state.story.hasOwnProperty("comments")) {
 
-                // comments = <Comment
-                //     comment={this.state.story}
-                //     key={this.state.story.id}
-                //     range={this.state.range} />;
+                if (this.state.comments_loaded && this.state.idfs_loaded) {
+                    keywords = get_keywords(this.state.comments, this.state.idfs);
+                    clusters = clustering.clusters_from_comments(this.state.comments, keywords);
+                    labeled = clustering.label_comments(clusters);
+                }
 
                 term_frequencies = <TermFrequencies
                     loaded={this.state.comments_loaded}
-                    comments={this.state.comments} />;
+                    keywords={keywords} />;
 
-                comments = <CommentsTree loaded={this.state.comments_loaded} root={this.state.story} />;
+                // clusters_summary = <ClustersSummary
+                //     loaded={this.state.comments_loaded}
+                //     keywords={keywords}
+                //     clusters={clusters} />
+
+                comments_tree = <CommentsTree loaded={this.state.comments_loaded} root={this.state.story} />;
+
+                comments = <Comment
+                    comment={this.state.story}
+                    key={this.state.story.id}
+                    range={this.state.range} />;
             }
             content = <div>
                 <StorySummary index={this.props.index} sentiments={sentiments} story={this.state.story} />
@@ -75,6 +108,7 @@ var Story = React.createClass({
                     values={sentiments}
                     click_callback={this.toggle_sentiment_range} />
                 {term_frequencies}
+                {comments_tree}
                 {comments}
             </div>;
         }
