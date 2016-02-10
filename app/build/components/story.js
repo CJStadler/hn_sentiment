@@ -10,6 +10,17 @@ var React = require('react'),
     TermFrequencies = require('../components/term_frequencies.js'),
     CommentsTree = require('../components/comments_tree.js');
 
+
+var idfs;
+// load idfs
+d3.json("/idfs.json", function(error, json) {
+    if (error) {
+        return console.warn(error);
+    } else {
+        idfs = json;
+    }
+});
+
 var Story = React.createClass({displayName: "Story",
 
     getInitialState: function() {
@@ -17,8 +28,6 @@ var Story = React.createClass({displayName: "Story",
             story: null,
             comments: [],
             comments_loaded: false,
-            idfs: {},
-            idfs_loaded: false,
             refs: [],
             range: {min: -100, max: 100}
         };
@@ -27,17 +36,10 @@ var Story = React.createClass({displayName: "Story",
     componentWillMount: function() {
         // get story
         api.item(this.props.id, this.refCollector, this.add_story);
-
-        // load idfs
-        d3.json("/idfs.json", this.store_idfs);
     },
 
-    store_idfs: function(error, json) {
-        if (error) {
-            return console.warn(error);
-        } else {
-            this.setState({idfs: json, idfs_loaded: true});
-        }
+    idfs_loaded: function() {
+        return typeof idfs === "object";
     },
 
     add_story: function(story) {
@@ -80,8 +82,8 @@ var Story = React.createClass({displayName: "Story",
         if (this.state.story !== null) {
             if (! this.props.condensed && this.state.story.hasOwnProperty("comments")) {
 
-                if (this.state.comments_loaded && this.state.idfs_loaded) {
-                    keywords = get_keywords(this.state.comments, this.state.idfs);
+                if (this.state.comments_loaded && this.idfs_loaded()) {
+                    keywords = get_keywords(this.state.comments, idfs);
                     clusters = clustering.clusters_from_comments(this.state.comments, keywords);
                     labeled = clustering.label_comments(clusters);
                 }
