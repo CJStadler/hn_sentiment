@@ -97,7 +97,7 @@ svg {
 
 /* Comments tree */
 .node circle {
-  stroke: steelblue;
+  stroke: #ccc;
   stroke-width: 1.5px;
 }
 

@@ -5,7 +5,8 @@ var CommentsTree = React.createClass({
 
     propTypes: {
         loaded: React.PropTypes.bool.isRequired,
-        root: React.PropTypes.object.isRequired
+        root: React.PropTypes.object.isRequired,
+        colors: React.PropTypes.func
     },
 
     componentDidMount: function() {
@@ -15,26 +16,13 @@ var CommentsTree = React.createClass({
 
     componentDidUpdate: function() {
         if (this.props.loaded) {
-            this.state.chart.render(this.props.root);
+            this.state.chart.render(this.props.root, this.props.colors);
         }
     },
 
     chart_id: "d3-tree-container",
 
     render: function() {
-
-        // where should the clustering be done?
-        // var clusters = d3_clustering.clusters_from_comments(this.props.flat_comments, this.props.terms, 5);
-
-        // list = clusters.map(function(cluster, i) {
-        //     var comments = cluster.map(function(comment_vector) {
-        //         return <li dangerouslySetInnerHTML={{__html: comment_vector.comment.text}}} />;
-        //     });
-        //     return <div>
-        //             <h2>{i}</h2>
-        //             <ul>{comments}</ul>
-        //         </div>;
-        // });
 
         var loading;
 

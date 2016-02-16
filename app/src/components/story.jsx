@@ -8,7 +8,8 @@ var React = require('react'),
     Comment = require('../components/comment.js'),
     Histogram = require('../components/histogram.js'),
     TermFrequencies = require('../components/term_frequencies.js'),
-    CommentsTree = require('../components/comments_tree.js');
+    CommentsTree = require('../components/comments_tree.js'),
+    ClustersSummary = require('../components/clusters_summary.js');
 
 
 var idfs;
@@ -20,6 +21,8 @@ d3.json("/idfs.json", function(error, json) {
         idfs = json;
     }
 });
+
+var cluster_colors = d3.scale.category10();
 
 var Story = React.createClass({
 
@@ -78,26 +81,32 @@ var Story = React.createClass({
         var content = "Loading...";
         var sentiments = this.state.comments.map(function(c) { return c.sentiment; });
 
-        var comments, comments_tree, term_frequencies, keywords, clusters, labeled;
+        var comments, comments_tree, term_frequencies, keywords, features, clusters,
+            clusters_summary, labeled;
         if (this.state.story !== null) {
             if (! this.props.condensed && this.state.story.hasOwnProperty("comments")) {
 
                 if (this.state.comments_loaded && this.idfs_loaded()) {
                     keywords = get_keywords(this.state.comments, idfs);
-                    clusters = clustering.clusters_from_comments(this.state.comments, keywords);
+                    features = clustering.pick_features(keywords, 10);
+                    clusters = clustering.clusters_from_comments(this.state.comments, features);
                     labeled = clustering.label_comments(clusters);
                 }
 
-                term_frequencies = <TermFrequencies
-                    loaded={this.state.comments_loaded}
-                    keywords={keywords} />;
-
-                // clusters_summary = <ClustersSummary
+                // term_frequencies = <TermFrequencies
                 //     loaded={this.state.comments_loaded}
-                //     keywords={keywords}
-                //     clusters={clusters} />
+                //     keywords={keywords} />;
 
-                comments_tree = <CommentsTree loaded={this.state.comments_loaded} root={this.state.story} />;
+                clusters_summary = <ClustersSummary
+                    loaded={this.state.comments_loaded}
+                    features={features}
+                    clusters={clusters}
+                    colors={cluster_colors} />;
+
+                comments_tree = <CommentsTree
+                    loaded={this.state.comments_loaded}
+                    root={this.state.story}
+                    colors={cluster_colors} />;
 
                 comments = <Comment
                     comment={this.state.story}
@@ -109,7 +118,7 @@ var Story = React.createClass({
                 <Histogram id={this.state.story.id}
                     values={sentiments}
                     click_callback={this.toggle_sentiment_range} />
-                {term_frequencies}
+                {clusters_summary}
                 {comments_tree}
                 {comments}
             </div>;
