@@ -38,7 +38,6 @@ var React = require('react'),
 var ClustersSummary = React.createClass({displayName: "ClustersSummary",
 
     propTypes: {
-        loaded: React.PropTypes.bool.isRequired,
         features: React.PropTypes.array,
         clusters: React.PropTypes.array,
         colors: React.PropTypes.func
@@ -48,26 +47,23 @@ var ClustersSummary = React.createClass({displayName: "ClustersSummary",
 
         var clusters = this.props.clusters,
             features = this.props.features,
-            cluster_colors = this.props.colors,
-            headers, rows;
+            cluster_colors = this.props.colors;
 
-        if (this.props.loaded) {
-            headers = features.map(function(term,i) {
-                return React.createElement("th", {key: i}, term);
+        var headers = features.map(function(term,i) {
+            return React.createElement("th", {key: i}, term);
+        });
+
+        var rows = clusters.map(function(cluster, cluster_index) {
+            var columns = features.map(function(term, feature_index) {
+                return React.createElement("td", {key: feature_index}, term_frequency(feature_index, cluster));
             });
 
-            rows = clusters.map(function(cluster, cluster_index) {
-                var columns = features.map(function(term, feature_index) {
-                    return React.createElement("td", {key: feature_index}, term_frequency(feature_index, cluster));
-                });
-
-                return React.createElement("tr", {key: cluster_index}, 
-                    React.createElement("td", null, React.createElement(ColorPatch, {color: cluster_colors(cluster_index)})), 
-                    React.createElement("td", null, cluster.length), 
-                    columns
-                );
-            });
-        }
+            return React.createElement("tr", {key: cluster_index}, 
+                React.createElement("td", null, React.createElement(ColorPatch, {color: cluster_colors(cluster_index)})), 
+                React.createElement("td", null, cluster.length), 
+                columns
+            );
+        });
 
         return React.createElement("table", {className: "clusters-table"}, 
             React.createElement("thead", null, React.createElement("tr", null, 
@@ -238,7 +234,6 @@ var React = require('react'),
 var CommentsTree = React.createClass({displayName: "CommentsTree",
 
     propTypes: {
-        loaded: React.PropTypes.bool.isRequired,
         root: React.PropTypes.object.isRequired,
         colors: React.PropTypes.func
     },
@@ -249,23 +244,14 @@ var CommentsTree = React.createClass({displayName: "CommentsTree",
     },
 
     componentDidUpdate: function() {
-        if (this.props.loaded) {
-            this.state.chart.render(this.props.root, this.props.colors);
-        }
+        this.state.chart.render(this.props.root, this.props.colors);
     },
 
     chart_id: "d3-tree-container",
 
     render: function() {
 
-        var loading;
-
-        if (! this.props.loaded) {
-            loading = "Loading...";
-        }
-
         return React.createElement("div", null, 
-            loading, 
             React.createElement("div", {id: this.chart_id})
         );
     }
@@ -449,28 +435,28 @@ var Story = React.createClass({displayName: "Story",
                     features = clustering.pick_features(keywords, 10);
                     clusters = clustering.clusters_from_comments(this.state.comments, features);
                     labeled = clustering.label_comments(clusters);
+
+                    clusters_summary = React.createElement(ClustersSummary, {
+                        features: features, 
+                        clusters: clusters, 
+                        colors: cluster_colors});
+
+                    comments_tree = React.createElement(CommentsTree, {
+                        root: this.state.story, 
+                        colors: cluster_colors});
                 }
 
                 // term_frequencies = <TermFrequencies
                 //     loaded={this.state.comments_loaded}
                 //     keywords={keywords} />;
 
-                clusters_summary = React.createElement(ClustersSummary, {
-                    loaded: this.state.comments_loaded, 
-                    features: features, 
-                    clusters: clusters, 
-                    colors: cluster_colors});
-
-                comments_tree = React.createElement(CommentsTree, {
-                    loaded: this.state.comments_loaded, 
-                    root: this.state.story, 
-                    colors: cluster_colors});
 
                 comments = React.createElement(Comment, {
                     comment: this.state.story, 
                     key: this.state.story.id, 
                     range: this.state.range});
             }
+
             content = React.createElement("div", null, 
                 React.createElement(StorySummary, {index: this.props.index, sentiments: sentiments, story: this.state.story}), 
                 React.createElement(Histogram, {id: this.state.story.id, 
@@ -752,8 +738,13 @@ var d3 = require("d3"),
 
 
 var clusters_from_comments = function(comments, terms, K) {
+    K = K || Math.max(2, Math.ceil(Math.sqrt(comments.length / 4))); // smaller than clusterfck default
     var vectors = comments_to_vectors(comments, terms);
     var clusters = generate_clusters(vectors, K);
+
+    clusters.sort(function(a,b) {
+        return (a.length < b.length) ? 1 : -1;
+    });
 
     return clusters;
 };

@@ -5,7 +5,6 @@ var React = require('react'),
 var ClustersSummary = React.createClass({displayName: "ClustersSummary",
 
     propTypes: {
-        loaded: React.PropTypes.bool.isRequired,
         features: React.PropTypes.array,
         clusters: React.PropTypes.array,
         colors: React.PropTypes.func
@@ -15,26 +14,23 @@ var ClustersSummary = React.createClass({displayName: "ClustersSummary",
 
         var clusters = this.props.clusters,
             features = this.props.features,
-            cluster_colors = this.props.colors,
-            headers, rows;
+            cluster_colors = this.props.colors;
 
-        if (this.props.loaded) {
-            headers = features.map(function(term,i) {
-                return React.createElement("th", {key: i}, term);
+        var headers = features.map(function(term,i) {
+            return React.createElement("th", {key: i}, term);
+        });
+
+        var rows = clusters.map(function(cluster, cluster_index) {
+            var columns = features.map(function(term, feature_index) {
+                return React.createElement("td", {key: feature_index}, term_frequency(feature_index, cluster));
             });
 
-            rows = clusters.map(function(cluster, cluster_index) {
-                var columns = features.map(function(term, feature_index) {
-                    return React.createElement("td", {key: feature_index}, term_frequency(feature_index, cluster));
-                });
-
-                return React.createElement("tr", {key: cluster_index}, 
-                    React.createElement("td", null, React.createElement(ColorPatch, {color: cluster_colors(cluster_index)})), 
-                    React.createElement("td", null, cluster.length), 
-                    columns
-                );
-            });
-        }
+            return React.createElement("tr", {key: cluster_index}, 
+                React.createElement("td", null, React.createElement(ColorPatch, {color: cluster_colors(cluster_index)})), 
+                React.createElement("td", null, cluster.length), 
+                columns
+            );
+        });
 
         return React.createElement("table", {className: "clusters-table"}, 
             React.createElement("thead", null, React.createElement("tr", null, 

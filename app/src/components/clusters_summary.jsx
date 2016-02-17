@@ -5,7 +5,6 @@ var React = require('react'),
 var ClustersSummary = React.createClass({
 
     propTypes: {
-        loaded: React.PropTypes.bool.isRequired,
         features: React.PropTypes.array,
         clusters: React.PropTypes.array,
         colors: React.PropTypes.func
@@ -15,26 +14,23 @@ var ClustersSummary = React.createClass({
 
         var clusters = this.props.clusters,
             features = this.props.features,
-            cluster_colors = this.props.colors,
-            headers, rows;
+            cluster_colors = this.props.colors;
 
-        if (this.props.loaded) {
-            headers = features.map(function(term,i) {
-                return <th key={i}>{term}</th>;
+        var headers = features.map(function(term,i) {
+            return <th key={i}>{term}</th>;
+        });
+
+        var rows = clusters.map(function(cluster, cluster_index) {
+            var columns = features.map(function(term, feature_index) {
+                return <td key={feature_index}>{term_frequency(feature_index, cluster)}</td>;
             });
 
-            rows = clusters.map(function(cluster, cluster_index) {
-                var columns = features.map(function(term, feature_index) {
-                    return <td key={feature_index}>{term_frequency(feature_index, cluster)}</td>;
-                });
-
-                return <tr key={cluster_index}>
-                    <td><ColorPatch color={cluster_colors(cluster_index)} /></td>
-                    <td>{cluster.length}</td>
-                    {columns}
-                </tr>;
-            });
-        }
+            return <tr key={cluster_index}>
+                <td><ColorPatch color={cluster_colors(cluster_index)} /></td>
+                <td>{cluster.length}</td>
+                {columns}
+            </tr>;
+        });
 
         return <table className="clusters-table">
             <thead><tr>

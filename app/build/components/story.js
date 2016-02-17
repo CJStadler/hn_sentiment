@@ -91,28 +91,28 @@ var Story = React.createClass({displayName: "Story",
                     features = clustering.pick_features(keywords, 10);
                     clusters = clustering.clusters_from_comments(this.state.comments, features);
                     labeled = clustering.label_comments(clusters);
+
+                    clusters_summary = React.createElement(ClustersSummary, {
+                        features: features, 
+                        clusters: clusters, 
+                        colors: cluster_colors});
+
+                    comments_tree = React.createElement(CommentsTree, {
+                        root: this.state.story, 
+                        colors: cluster_colors});
                 }
 
                 // term_frequencies = <TermFrequencies
                 //     loaded={this.state.comments_loaded}
                 //     keywords={keywords} />;
 
-                clusters_summary = React.createElement(ClustersSummary, {
-                    loaded: this.state.comments_loaded, 
-                    features: features, 
-                    clusters: clusters, 
-                    colors: cluster_colors});
-
-                comments_tree = React.createElement(CommentsTree, {
-                    loaded: this.state.comments_loaded, 
-                    root: this.state.story, 
-                    colors: cluster_colors});
 
                 comments = React.createElement(Comment, {
                     comment: this.state.story, 
                     key: this.state.story.id, 
                     range: this.state.range});
             }
+
             content = React.createElement("div", null, 
                 React.createElement(StorySummary, {index: this.props.index, sentiments: sentiments, story: this.state.story}), 
                 React.createElement(Histogram, {id: this.state.story.id, 

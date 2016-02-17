@@ -91,28 +91,28 @@ var Story = React.createClass({
                     features = clustering.pick_features(keywords, 10);
                     clusters = clustering.clusters_from_comments(this.state.comments, features);
                     labeled = clustering.label_comments(clusters);
+
+                    clusters_summary = <ClustersSummary
+                        features={features}
+                        clusters={clusters}
+                        colors={cluster_colors} />;
+
+                    comments_tree = <CommentsTree
+                        root={this.state.story}
+                        colors={cluster_colors} />;
                 }
 
                 // term_frequencies = <TermFrequencies
                 //     loaded={this.state.comments_loaded}
                 //     keywords={keywords} />;
 
-                clusters_summary = <ClustersSummary
-                    loaded={this.state.comments_loaded}
-                    features={features}
-                    clusters={clusters}
-                    colors={cluster_colors} />;
-
-                comments_tree = <CommentsTree
-                    loaded={this.state.comments_loaded}
-                    root={this.state.story}
-                    colors={cluster_colors} />;
 
                 comments = <Comment
                     comment={this.state.story}
                     key={this.state.story.id}
                     range={this.state.range} />;
             }
+
             content = <div>
                 <StorySummary index={this.props.index} sentiments={sentiments} story={this.state.story} />
                 <Histogram id={this.state.story.id}
