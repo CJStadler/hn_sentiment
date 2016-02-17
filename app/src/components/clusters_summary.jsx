@@ -28,7 +28,7 @@ var ClustersSummary = React.createClass({
 
             var cluster_sentiment = stats.normalized_median(cluster.map(function(c) {
                 return c.comment.sentiment;
-            })));
+            }));
 
             return <tr key={cluster_index}>
                 <td><ColorPatch color={cluster_colors(cluster_index)} /></td>

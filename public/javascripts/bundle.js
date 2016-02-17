@@ -59,9 +59,9 @@ var ClustersSummary = React.createClass({displayName: "ClustersSummary",
                 return React.createElement("td", {key: feature_index}, term_frequency(feature_index, cluster));
             });
 
-            var cluster_sentiment = stats.normalize(stats.median(cluster.map(function(c) {
+            var cluster_sentiment = stats.normalized_median(cluster.map(function(c) {
                 return c.comment.sentiment;
-            })));
+            }));
 
             return React.createElement("tr", {key: cluster_index}, 
                 React.createElement("td", null, React.createElement(ColorPatch, {color: cluster_colors(cluster_index)})), 
