@@ -107,10 +107,10 @@ var Story = React.createClass({
                 //     keywords={keywords} />;
 
 
-                comments = <Comment
-                    comment={this.state.story}
-                    key={this.state.story.id}
-                    range={this.state.range} />;
+                // comments = <Comment
+                //     comment={this.state.story}
+                //     key={this.state.story.id}
+                //     range={this.state.range} />;
             }
 
             content = <div>

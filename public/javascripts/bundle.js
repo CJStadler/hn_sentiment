@@ -33,7 +33,8 @@ module.exports = App;
 },{"./pages/index.js":12,"./pages/story_page.js":13,"history/lib/createBrowserHistory":29,"react":231,"react-dom":51,"react-router":71}],2:[function(require,module,exports){
 var React = require('react'),
     d3 = require('d3'),
-    ColorPatch = require('./color_patch.js');
+    ColorPatch = require('./color_patch.js'),
+    stats = require('../../../lib/stats.js');
 
 var ClustersSummary = React.createClass({displayName: "ClustersSummary",
 
@@ -58,9 +59,14 @@ var ClustersSummary = React.createClass({displayName: "ClustersSummary",
                 return React.createElement("td", {key: feature_index}, term_frequency(feature_index, cluster));
             });
 
+            var cluster_sentiment = stats.normalize(stats.median(cluster.map(function(c) {
+                return c.comment.sentiment;
+            })));
+
             return React.createElement("tr", {key: cluster_index}, 
                 React.createElement("td", null, React.createElement(ColorPatch, {color: cluster_colors(cluster_index)})), 
                 React.createElement("td", null, cluster.length), 
+                React.createElement("td", null, React.createElement(ColorPatch, {score: cluster_sentiment})), 
                 columns
             );
         });
@@ -69,6 +75,7 @@ var ClustersSummary = React.createClass({displayName: "ClustersSummary",
             React.createElement("thead", null, React.createElement("tr", null, 
                 React.createElement("th", null), 
                 React.createElement("th", null, "# comments"), 
+                React.createElement("th", null, "Sentiment"), 
                 headers
             )), 
             React.createElement("tbody", null, 
@@ -88,7 +95,7 @@ var term_frequency = function(term_index, cluster) {
 
 module.exports = ClustersSummary;
 
-},{"./color_patch.js":3,"d3":22,"react":231}],3:[function(require,module,exports){
+},{"../../../lib/stats.js":20,"./color_patch.js":3,"d3":22,"react":231}],3:[function(require,module,exports){
 var React = require('react'),
     color_scale = require('../../../lib/color_scale.js');
 
@@ -451,10 +458,10 @@ var Story = React.createClass({displayName: "Story",
                 //     keywords={keywords} />;
 
 
-                comments = React.createElement(Comment, {
-                    comment: this.state.story, 
-                    key: this.state.story.id, 
-                    range: this.state.range});
+                // comments = <Comment
+                //     comment={this.state.story}
+                //     key={this.state.story.id}
+                //     range={this.state.range} />;
             }
 
             content = React.createElement("div", null, 
@@ -1147,9 +1154,32 @@ var normalized_mean = function(sentiments) {
     return score;
 };
 
+var normalized_median = function(sentiments) {
+    var score = median(sentiments);
+    score = weight_by_comments(score, sentiments.length);
+    score = normalize(score);
+    return score;
+};
+
 // when there are more comments the score tends towards the mean, so this minimizes that
 var weight_by_comments = function(score, n_comments) {
     return score * Math.log(n_comments); // Log chosen somewhat arbitrarily
+};
+
+var median = function(values) {
+    var left, right, median;
+
+    values.sort();
+
+    if (values.length % 2 === 0) {
+        median = values[values.length/2];
+    } else {
+        right = Math.ceil(values.length/2);
+        left = right - 1;
+        median = (values[right] + values[left]) / 2;
+    }
+
+    return median;
 };
 
 var mean = function(values) {
@@ -1205,7 +1235,10 @@ var erf = function(x) {
 
 module.exports = {
     normalized_mean: normalized_mean,
+    normalized_median: normalized_median,
     normalize: normalize,
+    mean: mean,
+    median: median,
     neutral_score: normalize(weight_by_comments(0, 200))
 };
 

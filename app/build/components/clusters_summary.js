@@ -1,6 +1,7 @@
 var React = require('react'),
     d3 = require('d3'),
-    ColorPatch = require('./color_patch.js');
+    ColorPatch = require('./color_patch.js'),
+    stats = require('../../../lib/stats.js');
 
 var ClustersSummary = React.createClass({displayName: "ClustersSummary",
 
@@ -25,9 +26,14 @@ var ClustersSummary = React.createClass({displayName: "ClustersSummary",
                 return React.createElement("td", {key: feature_index}, term_frequency(feature_index, cluster));
             });
 
+            var cluster_sentiment = stats.normalize(stats.median(cluster.map(function(c) {
+                return c.comment.sentiment;
+            })));
+
             return React.createElement("tr", {key: cluster_index}, 
                 React.createElement("td", null, React.createElement(ColorPatch, {color: cluster_colors(cluster_index)})), 
                 React.createElement("td", null, cluster.length), 
+                React.createElement("td", null, React.createElement(ColorPatch, {score: cluster_sentiment})), 
                 columns
             );
         });
@@ -36,6 +42,7 @@ var ClustersSummary = React.createClass({displayName: "ClustersSummary",
             React.createElement("thead", null, React.createElement("tr", null, 
                 React.createElement("th", null), 
                 React.createElement("th", null, "# comments"), 
+                React.createElement("th", null, "Sentiment"), 
                 headers
             )), 
             React.createElement("tbody", null, 

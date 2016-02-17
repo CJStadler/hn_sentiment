@@ -1,6 +1,7 @@
 var React = require('react'),
     d3 = require('d3'),
-    ColorPatch = require('./color_patch.js');
+    ColorPatch = require('./color_patch.js'),
+    stats = require('../../../lib/stats.js');
 
 var ClustersSummary = React.createClass({
 
@@ -25,9 +26,14 @@ var ClustersSummary = React.createClass({
                 return <td key={feature_index}>{term_frequency(feature_index, cluster)}</td>;
             });
 
+            var cluster_sentiment = stats.normalized_median(cluster.map(function(c) {
+                return c.comment.sentiment;
+            })));
+
             return <tr key={cluster_index}>
                 <td><ColorPatch color={cluster_colors(cluster_index)} /></td>
                 <td>{cluster.length}</td>
+                <td><ColorPatch score={cluster_sentiment} /></td>
                 {columns}
             </tr>;
         });
@@ -36,6 +42,7 @@ var ClustersSummary = React.createClass({
             <thead><tr>
                 <th></th>
                 <th># comments</th>
+                <th>Sentiment</th>
                 {headers}
             </tr></thead>
             <tbody>

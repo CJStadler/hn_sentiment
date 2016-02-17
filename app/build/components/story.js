@@ -107,10 +107,10 @@ var Story = React.createClass({displayName: "Story",
                 //     keywords={keywords} />;
 
 
-                comments = React.createElement(Comment, {
-                    comment: this.state.story, 
-                    key: this.state.story.id, 
-                    range: this.state.range});
+                // comments = <Comment
+                //     comment={this.state.story}
+                //     key={this.state.story.id}
+                //     range={this.state.range} />;
             }
 
             content = React.createElement("div", null, 
