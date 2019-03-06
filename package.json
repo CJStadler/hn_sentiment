@@ -2,14 +2,8 @@
   "name": "hn_sentiment",
   "version": "1.0.0",
   "private": true,
-  "main": "server.js",
   "scripts": {
-    "dev": "nodemon server.js",
-    "build:jsx": "jsx app/src/ app/build/ -x jsx",
-    "build:bundle": "browserify app/build/app.js -o public/javascripts/bundle.js -v",
-    "build": "npm run build:jsx && npm run build:bundle",
-    "watch:jsx": "jsx -w app/src/ app/build/ -x jsx",
-    "watch:bundle": "watchify app/build/app.js -o public/javascripts/bundle.js -v"
+    "build": "webpack"
   },
   "dependencies": {
     "bluebird": "^3.2.1",
@@ -21,7 +15,6 @@
     "express": "~4.9.0",
     "firebase": "^2.3.2",
     "history": "^1.17.0",
-    "jade": "~1.6.0",
     "morgan": "~1.3.0",
     "natural": "^0.2.1",
     "react": "^0.14.0",
@@ -32,9 +25,9 @@
     "sentiment": "^1.0.4"
   },
   "devDependencies": {
-    "watchify": "latest",
-    "browserify": "latest",
-    "nodemon": "latest"
+    "jsx-loader": "^0.13.2",
+    "webpack": "^4.29.6",
+    "webpack-cli": "^3.2.3"
   },
   "author": "Chris Stadler"
 }

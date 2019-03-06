@@ -52,3 +52,7 @@ Icon
 # Files that might appear on external disk
 .Spotlight-V100
 .Trashes
+
+# Project files
+# ========================
+dist/bundle.js
